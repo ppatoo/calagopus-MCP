@@ -1,20 +1,22 @@
-MIT License
+CUSTOM SOURCE & USE LICENSE (COMMERCIAL RESTRICTION & LIABILITY DISCLAIMER)
 
-Copyright (c) 2026 Calagopus Team & Antigravity Team
+Copyright (c) 2026 ppatoo. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. OWNERSHIP & ATTRIBUTION
+The source code, scripts, binaries, and documentation in this repository are owned by ppatoo. 
+Any modifications, derivatives, forks, or redistributions of this codebase MUST retain this copyright notice 
+and provide prominent attribution and credit to the original author (ppatoo).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. NON-COMMERCIAL / FREE ACCESS RESTRICTION
+This software and any derived works MUST remain free of charge. No individual, organization, or entity is 
+permitted to sell, monetize, put behind a paywall, or license this code for commercial gain or paid distribution.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO QUALITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. DISCLAIMER OF LIABILITY & NO WARRANTY
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+
+DISCLAIMER / NOTICE:
+This codebase is experimental and crude. The author (ppatoo) assumes NO RESPONSIBILITY or LIABILITY 
+whatsoever for any vulnerabilities, exploits, security flaws, data loss, server downtime, system damage, or any 
+direct/indirect damages arising from the use, installation, or operation of this software. Users install 
+and execute this code entirely at their own risk.

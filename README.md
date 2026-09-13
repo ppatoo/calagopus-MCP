@@ -1,11 +1,29 @@
 # Calagopus Model Context Protocol (MCP) Connector Extension
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Custom](https://img.shields.io/badge/License-Custom%20(ppatoo)-red.svg)](LICENSE)
 [![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.2.1-blue.svg)](https://calagopus.com)
 
 The **Calagopus MCP Connector** (`dev.calagopus.mcpserver`) is an extension for the [Calagopus Game Panel](https://calagopus.com) that exposes **26 management tools** via the Model Context Protocol (MCP) using JSON-RPC 2.0 and Server-Sent Events (SSE) transports.
 
 This extension enables AI coding assistants, agents, and desktop applications (Cursor, Claude Desktop, Antigravity, custom MCP clients) to seamlessly manage game servers, daemon containers, volume files, backup archives, domain SSL certificates, and Minecraft plugin catalogs.
+
+---
+
+## ⚠️ Disclaimer & Liability Notice
+
+> **IMPORTANT**: This codebase is crude and experimental. The author (**ppatoo**) holds **NO LIABILITY or responsibility** for any security vulnerabilities, exploits, software bugs, data loss, server downtime, system damage, or any direct/indirect issues resulting from installing, operating, or modifying this code. Use and deploy entirely at your own risk.
+
+---
+
+## 📄 License & Terms of Use
+
+This project is licensed under a **Custom Source & Use License**:
+
+1. **Ownership & Attribution**: Code is owned by **ppatoo**. Any modifications, derived works, forks, or redistributions **must retain copyright notices** and provide prominent credit to **ppatoo**.
+2. **Non-Commercial Restriction**: This code **cannot be made paid**, sold, put behind a paywall, or monetized by anyone. It must remain free and open access.
+3. **No Warranty**: Provided "as-is" without warranty of any kind.
+
+See the full terms in the [LICENSE](LICENSE) file.
 
 ---
 
@@ -99,8 +117,3 @@ All tools support both hyphenated (`list-servers`), underscore (`list_servers`),
 - **Discovery Endpoint**: `GET /api/extensions/mcp/v1/info`
 - **SSE Stream Transport**: `GET /api/extensions/mcp/v1/sse`
 - **Message Transport**: `POST /api/extensions/mcp/v1/sse` or `POST /api/extensions/mcp/v1/messages`
-
----
-
-## 📄 License
-[MIT License](LICENSE) - Calagopus Team & Antigravity Team
