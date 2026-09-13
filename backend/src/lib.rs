@@ -25,10 +25,47 @@ use utoipa_axum::router::OpenApiRouter;
 #[derive(Default)]
 pub struct ExtensionStruct;
 
+pub async fn get_or_generate_mcp_secret(state: &State) -> String {
+    if let Ok(env_sec) = std::env::var("CALAGOPUS_MCP_SECRET") {
+        if !env_sec.trim().is_empty() {
+            return env_sec.trim().to_string();
+        }
+    }
+
+    let stored: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = 'dev_calagopus_mcp::secret_key'")
+        .fetch_optional(state.database.read())
+        .await
+        .ok()
+        .flatten();
+
+    if let Some(sec) = stored {
+        if !sec.trim().is_empty() {
+            return sec;
+        }
+    }
+
+    let new_key = format!("calagopus_mcp_sec_{}", uuid::Uuid::new_v4().simple());
+    let res = sqlx::query(
+        "INSERT INTO settings (key, value) VALUES ('dev_calagopus_mcp::secret_key', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
+    )
+    .bind(&new_key)
+    .execute(state.database.write())
+    .await;
+
+    if let Err(err) = res {
+        tracing::error!("Failed to persist dev_calagopus_mcp::secret_key to database: {:?}", err);
+    } else {
+        tracing::info!("🔑 Generated and saved new panel-unique Calagopus MCP secret key: {}", new_key);
+    }
+
+    new_key
+}
+
 #[async_trait::async_trait]
 impl Extension for ExtensionStruct {
-    async fn initialize(&mut self, _state: State) {
-        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension with 23 tools");
+    async fn initialize(&mut self, state: State) {
+        let key = get_or_generate_mcp_secret(&state).await;
+        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension. Active Secret Key: {}", key);
     }
 
     async fn initialize_router(
@@ -55,7 +92,7 @@ pub fn get_extension() -> ConstructedExtension {
             package_name: "dev.calagopus.mcpserver".to_string(),
             name: "MCP Connector".to_string(),
             panel_version: semver::VersionReq::parse(">= 1.1.0").unwrap(),
-            license_text: Some("MIT".to_string()),
+            license_text: Some("Custom License - Copyright (c) 2026 ppatoo. Non-commercial, Attribution Required.".to_string()),
         },
         package_name: "dev.calagopus.mcpserver",
         description: "Exposes Calagopus Game Panel management tools (23 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
@@ -78,13 +115,12 @@ struct JsonRpcRequest {
     params: Option<Value>,
 }
 
-fn check_mcp_auth(headers: &HeaderMap, uri: &axum::http::Uri) -> Result<(), Response> {
+async fn check_mcp_auth(state: &State, headers: &HeaderMap, uri: &axum::http::Uri) -> Result<(), Response> {
     if std::env::var("CALAGOPUS_MCP_AUTH_DISABLED").as_deref() == Ok("true") {
         return Ok(());
     }
 
-    let expected_secret = std::env::var("CALAGOPUS_MCP_SECRET")
-        .unwrap_or_else(|_| "calagopus_mcp_sec_052ef6fe079321fe1fac23eae66f7db7".to_string());
+    let expected_secret = get_or_generate_mcp_secret(state).await;
 
     // Check Authorization: Bearer <secret>
     if let Some(auth_val) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
@@ -131,7 +167,7 @@ async fn universal_mcp_handler(
     AxumState(state): AxumState<State>,
     body: Bytes,
 ) -> Response {
-    if let Err(unauth_response) = check_mcp_auth(&headers, &uri) {
+    if let Err(unauth_response) = check_mcp_auth(&state, &headers, &uri).await {
         return unauth_response;
     }
 
