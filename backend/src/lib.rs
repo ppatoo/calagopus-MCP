@@ -65,7 +65,7 @@ pub async fn get_or_generate_mcp_secret(state: &State) -> String {
 impl Extension for ExtensionStruct {
     async fn initialize(&mut self, state: State) {
         let key = get_or_generate_mcp_secret(&state).await;
-        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension. Active Secret Key: {}", key);
+        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.0. Active Secret Key: {}", key);
     }
 
     async fn initialize_router(
@@ -78,6 +78,8 @@ impl Extension for ExtensionStruct {
                 .route("/api/extensions/mcp/v1/info", any(universal_mcp_handler))
                 .route("/api/extensions/mcp/v1/messages", any(universal_mcp_handler))
                 .route("/api/extensions/mcp/v1/sse", any(universal_mcp_handler))
+                .route("/api/extensions/mcp/v1/key", axum::routing::get(get_mcp_key_handler))
+                .route("/api/extensions/mcp/v1/status", axum::routing::get(get_mcp_status_handler))
                 .route("/mcp", any(universal_mcp_handler))
                 .route("/api/mcp", any(universal_mcp_handler));
 
@@ -95,11 +97,39 @@ pub fn get_extension() -> ConstructedExtension {
             license_text: Some("Custom License - Copyright (c) 2026 ppatoo. Non-commercial, Attribution Required.".to_string()),
         },
         package_name: "dev.calagopus.mcpserver",
-        description: "Exposes Calagopus Game Panel management tools (23 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
+        description: "Exposes Calagopus Game Panel management tools (26 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
         authors: &["Calagopus Team", "AGY Team"],
-        version: semver::Version::new(1, 2, 1),
+        version: semver::Version::new(1, 3, 0),
         extension: Arc::new(ExtensionStruct),
     }
+}
+
+async fn get_mcp_key_handler(AxumState(state): AxumState<State>) -> Response {
+    let key = get_or_generate_mcp_secret(&state).await;
+    Json(json!({
+        "status": "ok",
+        "secret_key": key,
+        "sse_url": format!("/api/extensions/mcp/v1/sse?api_key={key}"),
+        "header_example": format!("Authorization: Bearer {key}")
+    })).into_response()
+}
+
+async fn get_mcp_status_handler(AxumState(state): AxumState<State>) -> Response {
+    let key = get_or_generate_mcp_secret(&state).await;
+    Json(json!({
+        "package_name": "dev.calagopus.mcpserver",
+        "name": "MCP Connector",
+        "version": "1.3.0",
+        "status": "active",
+        "secret_key": key,
+        "tools_count": 26,
+        "endpoints": {
+            "key": "/api/extensions/mcp/v1/key",
+            "sse": format!("/api/extensions/mcp/v1/sse?api_key={key}"),
+            "messages": "/api/extensions/mcp/v1/messages",
+            "info": "/api/extensions/mcp/v1/info"
+        }
+    })).into_response()
 }
 
 // -----------------------------------------------------------------------------

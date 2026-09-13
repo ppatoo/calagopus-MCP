@@ -1,7 +1,7 @@
 # Calagopus Model Context Protocol (MCP) Connector Extension
 
 [![License: Custom](https://img.shields.io/badge/License-Custom%20(ppatoo)-red.svg)](LICENSE)
-[![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.2.1-blue.svg)](https://calagopus.com)
+[![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.3.0-blue.svg)](https://calagopus.com)
 
 The **Calagopus MCP Connector** (`dev.calagopus.mcpserver`) is an extension for the [Calagopus Game Panel](https://calagopus.com) that exposes **26 management tools** via the Model Context Protocol (MCP) using JSON-RPC 2.0 and Server-Sent Events (SSE) transports.
 
@@ -31,7 +31,18 @@ See the full terms in the [LICENSE](LICENSE) file.
 
 - **Extension Archive File**: `dev_calagopus_mcpserver.c7s` (Also available in `/home/pato/Downloads/dev_calagopus_mcpserver.c7s`)
 - **Package Identifier**: `dev.calagopus.mcpserver`
-- **Version**: `1.2.1`
+- **Version**: `1.3.0`
+
+---
+
+## 🔐 Per-Panel Secret Authentication Key
+
+When the extension is installed/initialized on any Calagopus panel instance, it automatically generates a 32-hex cryptographically random secret key (`calagopus_mcp_sec_<32_hex_chars>`) and persists it to the PostgreSQL `settings` table. No two panels share the same key.
+
+### Viewing Your Key:
+1. **Panel Frontend UI**: Navigate to Admin Extensions $\rightarrow$ **MCP Connector Widget** in your Calagopus panel to view your secret key and click **Copy Key** / **Copy Full SSE URL**.
+2. **API Endpoint**: Perform a `GET /api/extensions/mcp/v1/key` or `GET /api/extensions/mcp/v1/status` request.
+3. **System Logs**: View panel startup logs for line `🔑 Initializing Calagopus MCP Connector... Active Secret Key: calagopus_mcp_sec_...`.
 
 ---
 
@@ -57,7 +68,7 @@ Add the Calagopus MCP Server to your MCP client configuration (`~/.gemini/config
 {
   "mcpServers": {
     "calagopus-local": {
-      "url": "http://127.0.0.1:8000/api/extensions/mcp/v1/sse?api_key=calagopus_mcp_sec_052ef6fe079321fe1fac23eae66f7db7",
+      "url": "http://127.0.0.1:8000/api/extensions/mcp/v1/sse?api_key=<YOUR_PANEL_SECRET_KEY>",
       "transport": "sse"
     }
   }
