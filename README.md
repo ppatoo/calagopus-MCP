@@ -57,7 +57,7 @@ Add the Calagopus MCP Server to your MCP client configuration (`~/.gemini/config
 {
   "mcpServers": {
     "calagopus-local": {
-      "url": "http://127.0.0.1:8000/api/extensions/mcp/v1/sse",
+      "url": "http://127.0.0.1:8000/api/extensions/mcp/v1/sse?api_key=calagopus_mcp_sec_052ef6fe079321fe1fac23eae66f7db7",
       "transport": "sse"
     }
   }

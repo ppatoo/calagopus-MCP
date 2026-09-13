@@ -84,7 +84,7 @@ fn check_mcp_auth(headers: &HeaderMap, uri: &axum::http::Uri) -> Result<(), Resp
     }
 
     let expected_secret = std::env::var("CALAGOPUS_MCP_SECRET")
-        .unwrap_or_else(|_| "calagopus_mcp_sec_key_2026".to_string());
+        .unwrap_or_else(|_| "calagopus_mcp_sec_052ef6fe079321fe1fac23eae66f7db7".to_string());
 
     // Check Authorization: Bearer <secret>
     if let Some(auth_val) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
