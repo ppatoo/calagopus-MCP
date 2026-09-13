@@ -1,9 +1,9 @@
 # Calagopus Model Context Protocol (MCP) Connector Extension
 
 [![License: Custom](https://img.shields.io/badge/License-Custom%20(ppatoo)-red.svg)](LICENSE)
-[![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.3.0-blue.svg)](https://calagopus.com)
+[![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.3.1-blue.svg)](https://calagopus.com)
 
-The **Calagopus MCP Connector** (`dev.calagopus.mcpserver`) is an extension for the [Calagopus Game Panel](https://calagopus.com) that exposes **26 management tools** via the Model Context Protocol (MCP) using JSON-RPC 2.0 and Server-Sent Events (SSE) transports.
+The **Calagopus MCP Connector** (`dev.calagopus.mcpserver`) is an extension for the [Calagopus Game Panel](https://calagopus.com) authored by **Pato** that exposes **26 management tools** via the Model Context Protocol (MCP) using JSON-RPC 2.0 and Server-Sent Events (SSE) transports.
 
 This extension enables AI coding assistants, agents, and desktop applications (Cursor, Claude Desktop, Antigravity, custom MCP clients) to seamlessly manage game servers, daemon containers, volume files, backup archives, domain SSL certificates, and Minecraft plugin catalogs.
 
@@ -11,7 +11,7 @@ This extension enables AI coding assistants, agents, and desktop applications (C
 
 ## ⚠️ Disclaimer & Liability Notice
 
-> **IMPORTANT**: This codebase is crude and experimental. The author (**ppatoo**) holds **NO LIABILITY or responsibility** for any security vulnerabilities, exploits, software bugs, data loss, server downtime, system damage, or any direct/indirect issues resulting from installing, operating, or modifying this code. Use and deploy entirely at your own risk.
+> **IMPORTANT**: This codebase is crude and experimental. The author (**Pato**) holds **NO LIABILITY or responsibility** for any security vulnerabilities, exploits, software bugs, data loss, server downtime, system damage, or any direct/indirect issues resulting from installing, operating, or modifying this code. Use and deploy entirely at your own risk.
 
 ---
 
@@ -19,7 +19,7 @@ This extension enables AI coding assistants, agents, and desktop applications (C
 
 This project is licensed under a **Custom Source & Use License**:
 
-1. **Ownership & Attribution**: Code is owned by **ppatoo**. Any modifications, derived works, forks, or redistributions **must retain copyright notices** and provide prominent credit to **ppatoo**.
+1. **Ownership & Attribution**: Code is owned by **Pato**. Any modifications, derived works, forks, or redistributions **must retain copyright notices** and provide prominent credit to **Pato**.
 2. **Non-Commercial Restriction**: This code **cannot be made paid**, sold, put behind a paywall, or monetized by anyone. It must remain free and open access.
 3. **No Warranty**: Provided "as-is" without warranty of any kind.
 
@@ -31,18 +31,21 @@ See the full terms in the [LICENSE](LICENSE) file.
 
 - **Extension Archive File**: `dev_calagopus_mcpserver.c7s` (Also available in `/home/pato/Downloads/dev_calagopus_mcpserver.c7s`)
 - **Package Identifier**: `dev.calagopus.mcpserver`
-- **Version**: `1.3.0`
+- **Author**: `Pato`
+- **Version**: `1.3.1`
 
 ---
 
-## 🔐 Per-Panel Secret Authentication Key
+## 🔐 Extension Configure Dashboard & Key Rotation
 
-When the extension is installed/initialized on any Calagopus panel instance, it automatically generates a 32-hex cryptographically random secret key (`calagopus_mcp_sec_<32_hex_chars>`) and persists it to the PostgreSQL `settings` table. No two panels share the same key.
+When installed on any Calagopus panel instance, the extension automatically generates a 32-hex cryptographically random secret key (`calagopus_mcp_sec_<32_hex_chars>`) stored in the PostgreSQL `settings` table.
 
-### Viewing Your Key:
-1. **Panel Frontend UI**: Navigate to Admin Extensions $\rightarrow$ **MCP Connector Widget** in your Calagopus panel to view your secret key and click **Copy Key** / **Copy Full SSE URL**.
-2. **API Endpoint**: Perform a `GET /api/extensions/mcp/v1/key` or `GET /api/extensions/mcp/v1/status` request.
-3. **System Logs**: View panel startup logs for line `🔑 Initializing Calagopus MCP Connector... Active Secret Key: calagopus_mcp_sec_...`.
+### Managing & Rotating Your Key:
+1. **Extension Configure Page**: Navigate to Admin Extensions $\rightarrow$ **MCP Connector Widget** in your panel to view your active key, copy the authenticated SSE URL, and click **🔄 Rotate Secret Key** to instantly re-roll a new key at any time.
+2. **Key API Endpoints**:
+   - `GET /api/extensions/mcp/v1/key`: Retrieve current key & SSE URL.
+   - `POST /api/extensions/mcp/v1/key/rotate`: Re-roll and save a new secret key.
+   - `GET /api/extensions/mcp/v1/status`: Extension status and metadata.
 
 ---
 

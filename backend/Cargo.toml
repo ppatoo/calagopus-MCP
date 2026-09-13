@@ -1,9 +1,9 @@
 [package]
 name = "dev_calagopus_mcpserver"
-version = "1.3.0"
+version = "1.3.1"
 edition = "2024"
 description = "Model Context Protocol (MCP) Connector extension for Calagopus game panel."
-authors = ["Calagopus Team"]
+authors = ["Pato"]
 
 [dependencies]
 shared = { path = "../../shared" }

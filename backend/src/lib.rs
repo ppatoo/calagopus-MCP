@@ -44,6 +44,10 @@ pub async fn get_or_generate_mcp_secret(state: &State) -> String {
         }
     }
 
+    rotate_mcp_secret(state).await
+}
+
+pub async fn rotate_mcp_secret(state: &State) -> String {
     let new_key = format!("calagopus_mcp_sec_{}", uuid::Uuid::new_v4().simple());
     let res = sqlx::query(
         "INSERT INTO settings (key, value) VALUES ('dev_calagopus_mcp::secret_key', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
@@ -53,9 +57,9 @@ pub async fn get_or_generate_mcp_secret(state: &State) -> String {
     .await;
 
     if let Err(err) = res {
-        tracing::error!("Failed to persist dev_calagopus_mcp::secret_key to database: {:?}", err);
+        tracing::error!("Failed to persist dev_calagopus_mcp::secret_key in database: {:?}", err);
     } else {
-        tracing::info!("🔑 Generated and saved new panel-unique Calagopus MCP secret key: {}", new_key);
+        tracing::info!("🔄 Generated/Rotated panel-unique Calagopus MCP secret key.");
     }
 
     new_key
@@ -64,8 +68,8 @@ pub async fn get_or_generate_mcp_secret(state: &State) -> String {
 #[async_trait::async_trait]
 impl Extension for ExtensionStruct {
     async fn initialize(&mut self, state: State) {
-        let key = get_or_generate_mcp_secret(&state).await;
-        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.0. Active Secret Key: {}", key);
+        let _ = get_or_generate_mcp_secret(&state).await;
+        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.1 by Pato.");
     }
 
     async fn initialize_router(
@@ -79,6 +83,7 @@ impl Extension for ExtensionStruct {
                 .route("/api/extensions/mcp/v1/messages", any(universal_mcp_handler))
                 .route("/api/extensions/mcp/v1/sse", any(universal_mcp_handler))
                 .route("/api/extensions/mcp/v1/key", axum::routing::get(get_mcp_key_handler))
+                .route("/api/extensions/mcp/v1/key/rotate", any(rotate_mcp_key_handler))
                 .route("/api/extensions/mcp/v1/status", axum::routing::get(get_mcp_status_handler))
                 .route("/mcp", any(universal_mcp_handler))
                 .route("/api/mcp", any(universal_mcp_handler));
@@ -94,12 +99,12 @@ pub fn get_extension() -> ConstructedExtension {
             package_name: "dev.calagopus.mcpserver".to_string(),
             name: "MCP Connector".to_string(),
             panel_version: semver::VersionReq::parse(">= 1.1.0").unwrap(),
-            license_text: Some("Custom License - Copyright (c) 2026 ppatoo. Non-commercial, Attribution Required.".to_string()),
+            license_text: Some("Custom License - Copyright (c) 2026 Pato. Non-commercial, Attribution Required.".to_string()),
         },
         package_name: "dev.calagopus.mcpserver",
         description: "Exposes Calagopus Game Panel management tools (26 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
-        authors: &["Calagopus Team", "AGY Team"],
-        version: semver::Version::new(1, 3, 0),
+        authors: &["Pato"],
+        version: semver::Version::new(1, 3, 1),
         extension: Arc::new(ExtensionStruct),
     }
 }
@@ -114,17 +119,30 @@ async fn get_mcp_key_handler(AxumState(state): AxumState<State>) -> Response {
     })).into_response()
 }
 
+async fn rotate_mcp_key_handler(AxumState(state): AxumState<State>) -> Response {
+    let new_key = rotate_mcp_secret(&state).await;
+    Json(json!({
+        "status": "ok",
+        "message": "MCP Secret Key successfully rotated.",
+        "secret_key": new_key,
+        "sse_url": format!("/api/extensions/mcp/v1/sse?api_key={new_key}"),
+        "header_example": format!("Authorization: Bearer {new_key}")
+    })).into_response()
+}
+
 async fn get_mcp_status_handler(AxumState(state): AxumState<State>) -> Response {
     let key = get_or_generate_mcp_secret(&state).await;
     Json(json!({
         "package_name": "dev.calagopus.mcpserver",
         "name": "MCP Connector",
-        "version": "1.3.0",
+        "version": "1.3.1",
+        "author": "Pato",
         "status": "active",
         "secret_key": key,
         "tools_count": 26,
         "endpoints": {
             "key": "/api/extensions/mcp/v1/key",
+            "rotate_key": "/api/extensions/mcp/v1/key/rotate",
             "sse": format!("/api/extensions/mcp/v1/sse?api_key={key}"),
             "messages": "/api/extensions/mcp/v1/messages",
             "info": "/api/extensions/mcp/v1/info"
