@@ -78,12 +78,63 @@ struct JsonRpcRequest {
     params: Option<Value>,
 }
 
+fn check_mcp_auth(headers: &HeaderMap, uri: &axum::http::Uri) -> Result<(), Response> {
+    if std::env::var("CALAGOPUS_MCP_AUTH_DISABLED").as_deref() == Ok("true") {
+        return Ok(());
+    }
+
+    let expected_secret = std::env::var("CALAGOPUS_MCP_SECRET")
+        .unwrap_or_else(|_| "calagopus_mcp_sec_key_2026".to_string());
+
+    // Check Authorization: Bearer <secret>
+    if let Some(auth_val) = headers.get("authorization").and_then(|v| v.to_str().ok()) {
+        if auth_val.starts_with("Bearer ") && auth_val.trim_start_matches("Bearer ").trim() == expected_secret {
+            return Ok(());
+        }
+    }
+
+    // Check X-MCP-Key or X-API-Key
+    if let Some(key_val) = headers.get("x-mcp-key").or_else(|| headers.get("x-api-key")).and_then(|v| v.to_str().ok()) {
+        if key_val.trim() == expected_secret {
+            return Ok(());
+        }
+    }
+
+    // Check URI query parameters (?api_key=... or ?token=... or ?key=...)
+    if let Some(query) = uri.query() {
+        for pair in query.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                if (k == "api_key" || k == "token" || k == "key" || k == "api-key" || k == "mcp_key") && v == expected_secret {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    tracing::warn!("Unauthorized MCP request attempt to URI '{}'", uri.path());
+
+    let unauthorized_response = Json(json!({
+        "jsonrpc": "2.0",
+        "error": {
+            "code": -32001,
+            "message": "Unauthorized: Invalid or missing MCP authentication secret key. Provide 'Authorization: Bearer <key>', 'X-MCP-Key: <key>', or query parameter '?api_key=<key>'."
+        }
+    }));
+
+    Err((StatusCode::UNAUTHORIZED, unauthorized_response).into_response())
+}
+
 async fn universal_mcp_handler(
     method: Method,
     headers: HeaderMap,
+    uri: axum::http::Uri,
     AxumState(state): AxumState<State>,
     body: Bytes,
 ) -> Response {
+    if let Err(unauth_response) = check_mcp_auth(&headers, &uri) {
+        return unauth_response;
+    }
+
     let is_sse_request = headers
         .get("accept")
         .and_then(|v| v.to_str().ok())
