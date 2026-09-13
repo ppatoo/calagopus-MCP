@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Extension } from 'shared';
 
-export default function McpExtensionWidget() {
+function McpExtensionWidget() {
   const [secretKey, setSecretKey] = useState<string>('Loading...');
   const [copiedKey, setCopiedKey] = useState<boolean>(false);
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
@@ -83,7 +84,7 @@ export default function McpExtensionWidget() {
 
       {/* Toast message notification */}
       {message && (
-        <div className="mb-4 p-3 bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-medium rounded-lg animate-fade-in flex items-center justify-between">
+        <div className="mb-4 p-3 bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-medium rounded-lg flex items-center justify-between">
           <span>{message}</span>
         </div>
       )}
@@ -187,3 +188,9 @@ export default function McpExtensionWidget() {
     </div>
   );
 }
+
+export class McpExtension extends Extension {
+  public cardConfigurationPage = McpExtensionWidget;
+}
+
+export default new McpExtension();
