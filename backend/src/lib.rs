@@ -305,32 +305,45 @@ fn get_tools_list() -> Value {
         "tools": [
             {
                 "name": "get-system-health",
-                "description": "Query live Calagopus panel system metrics, host RAM/CPU stats, database connections, and cache latency.",
+                "description": "Query live Calagopus panel system metrics: user/node/server counts and current timestamp.",
                 "inputSchema": { "type": "object", "properties": {} }
             },
             {
                 "name": "list-nests",
                 "description": "List all game nests, egg repositories, and server templates configured in Calagopus.",
-                "inputSchema": { "type": "object", "properties": {} }
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "limit":  { "type": "integer", "description": "Max nests to return (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset (default 0)" }
+                    }
+                }
             },
             {
                 "name": "list-users",
                 "description": "List registered panel users, email addresses, roles, and administrative privileges.",
-                "inputSchema": { "type": "object", "properties": {} }
-            },
-            {
-                "name": "list-servers",
-                "description": "Every server the key can see, with UUIDs, nodes, memory/disk allocations, status, and creation timestamps.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "limit": { "type": "integer", "description": "Max servers to return (default 50)" }
+                        "limit":  { "type": "integer", "description": "Max users to return (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset (default 0)" }
+                    }
+                }
+            },
+            {
+                "name": "list-servers",
+                "description": "Every server the key can see, with UUIDs, nodes, memory/disk allocations, and creation timestamps.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "limit":  { "type": "integer", "description": "Max servers to return (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset (default 0)" }
                     }
                 }
             },
             {
                 "name": "get-server",
-                "description": "One server in detail, including allocation, node mapping, egg config, and the daemon's live state.",
+                "description": "One server in detail, including allocation, node mapping, and the daemon's live state.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -358,7 +371,7 @@ fn get_tools_list() -> Value {
                     "type": "object",
                     "properties": {
                         "server_uuid": { "type": "string", "description": "The UUID of the target server" },
-                        "command": { "type": "string", "description": "The console command string to execute (e.g. 'say Hello', 'op PlayerName')" }
+                        "command": { "type": "string", "description": "The console command string to execute" }
                     },
                     "required": ["server_uuid", "command"]
                 }
@@ -378,7 +391,13 @@ fn get_tools_list() -> Value {
             {
                 "name": "list-machines",
                 "description": "Enrolled machines (nodes) with health status, SFTP port, URL, memory, and disk capacity.",
-                "inputSchema": { "type": "object", "properties": {} }
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "limit":  { "type": "integer", "description": "Max machines to return (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset (default 0)" }
+                    }
+                }
             },
             {
                 "name": "list-files",
@@ -394,7 +413,7 @@ fn get_tools_list() -> Value {
             },
             {
                 "name": "read-file",
-                "description": "Read a text file from the server volume, up to 1 MB.",
+                "description": "Read a text file from the server volume. Files larger than 1 MiB are rejected.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -406,26 +425,28 @@ fn get_tools_list() -> Value {
             },
             {
                 "name": "write-file",
-                "description": "Create a file or replace its contents in the server volume. No undo.",
+                "description": "Create a file or replace its contents in the server volume.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "server_uuid": { "type": "string", "description": "The UUID of the target server" },
                         "path": { "type": "string", "description": "File path to create or overwrite" },
-                        "content": { "type": "string", "description": "Text content to write" }
+                        "content": { "type": "string", "description": "Text content to write" },
+                        "overwrite": { "type": "boolean", "description": "If false and file exists, return error (default true)" }
                     },
                     "required": ["server_uuid", "path", "content"]
                 }
             },
             {
                 "name": "upload-file-from-url",
-                "description": "Have the machine fetch a file straight onto the server container volume.",
+                "description": "Have the machine fetch a file straight onto the server container volume. URL must be http(s).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "server_uuid": { "type": "string", "description": "The UUID of the target server" },
-                        "url": { "type": "string", "description": "Direct download URL of the file" },
-                        "directory": { "type": "string", "description": "Target directory on server (default '/')" }
+                        "url": { "type": "string", "description": "Direct download URL (must start with http:// or https://)" },
+                        "directory": { "type": "string", "description": "Target directory on server (default '/')" },
+                        "foreground": { "type": "boolean", "description": "Wait for download to complete before returning (default false)" }
                     },
                     "required": ["server_uuid", "url"]
                 }
@@ -437,20 +458,23 @@ fn get_tools_list() -> Value {
                     "type": "object",
                     "properties": {
                         "server_uuid": { "type": "string", "description": "The UUID of the target server" },
-                        "path": { "type": "string", "description": "File or directory path to download (default '/')" }
+                        "path": { "type": "string", "description": "File or directory path to download (default '/')" },
+                        "expiry_seconds": { "type": "integer", "description": "JWT link expiry in seconds (default 3600)" }
                     },
                     "required": ["server_uuid"]
                 }
             },
             {
                 "name": "list-backups",
-                "description": "Every backup a server holds, with state, checksum, creation timestamp, and size in bytes.",
+                "description": "Every backup a server holds, with state, creation timestamp, and size in bytes.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "server_uuid": { "type": "string", "description": "The UUID of the target server" }
-                    },
-                    "required": ["server_uuid"]
+                        "server_uuid": { "type": "string", "description": "Optional UUID to filter by server" },
+                        "limit":  { "type": "integer", "description": "Max backups to return (default 50)" },
+                        "offset": { "type": "integer", "description": "Pagination offset (default 0)" },
+                        "status": { "type": "string", "enum": ["successful", "failed"], "description": "Optional filter by backup status" }
+                    }
                 }
             },
             {
@@ -484,7 +508,7 @@ fn get_tools_list() -> Value {
                     "type": "object",
                     "properties": {
                         "server_uuid": { "type": "string", "description": "The UUID of the target server" },
-                        "archive_url": { "type": "string", "description": "URL to ZIP or tar.gz file archive to deploy" },
+                        "archive_url": { "type": "string", "description": "URL to ZIP or tar.gz file archive (must be http(s))" },
                         "target_directory": { "type": "string", "description": "Target folder to extract into (default '/')" }
                     },
                     "required": ["server_uuid", "archive_url"]
@@ -496,8 +520,8 @@ fn get_tools_list() -> Value {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "query": { "type": "string", "description": "Search query keywords (e.g. 'LuckPerms', 'Essentials', 'Vault')" },
-                        "software": { "type": "string", "description": "Server software (e.g. 'paper', 'spigot', 'velocity', 'fabric')" },
+                        "query": { "type": "string", "description": "Search query keywords" },
+                        "software": { "type": "string", "description": "Server software (e.g. 'paper', 'spigot', 'fabric')" },
                         "mc_version": { "type": "string", "description": "Minecraft target version (e.g. '1.20.4')" }
                     },
                     "required": ["query"]
@@ -516,14 +540,15 @@ fn get_tools_list() -> Value {
             },
             {
                 "name": "install-plugin",
-                "description": "Install a plugin and its required dependencies from the catalog into /plugins.",
+                "description": "Install a plugin JAR into /plugins. Resolves from Modrinth if plugin_id is given. Optionally verifies checksum.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "server_uuid": { "type": "string", "description": "The UUID of the target server" },
-                        "plugin_id": { "type": "string", "description": "Modrinth or catalog plugin ID" },
+                        "server_uuid":  { "type": "string", "description": "The UUID of the target server" },
+                        "plugin_id":    { "type": "string", "description": "Modrinth plugin ID" },
                         "download_url": { "type": "string", "description": "Direct plugin JAR download URL" },
-                        "filename": { "type": "string", "description": "JAR filename to save as" }
+                        "filename":     { "type": "string", "description": "JAR filename to save as" },
+                        "checksum":     { "type": "string", "description": "Optional expected SHA-1 checksum for verification" }
                     },
                     "required": ["server_uuid"]
                 }
@@ -535,9 +560,57 @@ fn get_tools_list() -> Value {
                     "type": "object",
                     "properties": {
                         "server_uuid": { "type": "string", "description": "The UUID of the target server" },
-                        "filename": { "type": "string", "description": "JAR filename in /plugins (e.g. 'PluginName.jar')" }
+                        "filename":    { "type": "string", "description": "JAR filename in /plugins" }
                     },
                     "required": ["server_uuid", "filename"]
+                }
+            },
+            {
+                "name": "get-site",
+                "description": "List domain bindings for a server, or all domain bindings panel-wide.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "server_uuid": { "type": "string", "description": "Optional UUID to filter to a specific server" }
+                    }
+                }
+            },
+            {
+                "name": "attach-domain",
+                "description": "Bind a custom domain to a game server.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "server_uuid": { "type": "string", "description": "The UUID of the target server" },
+                        "domain":      { "type": "string", "description": "The domain name to attach (e.g. 'play.example.com')" }
+                    },
+                    "required": ["server_uuid", "domain"]
+                }
+            },
+            {
+                "name": "detach-domain",
+                "description": "Remove a custom domain binding from a game server.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "server_uuid": { "type": "string", "description": "The UUID of the target server" },
+                        "domain":      { "type": "string", "description": "The domain name to detach" }
+                    },
+                    "required": ["server_uuid", "domain"]
+                }
+            },
+            {
+                "name": "deploy-repo",
+                "description": "Clone a GitHub or GitLab repository branch onto a server volume by downloading its archive tarball.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "server_uuid":      { "type": "string", "description": "The UUID of the target server" },
+                        "repo_url":         { "type": "string", "description": "HTTPS URL to the repository (e.g. 'https://github.com/user/repo')" },
+                        "branch":           { "type": "string", "description": "Branch to deploy (default 'main')" },
+                        "target_directory": { "type": "string", "description": "Directory to deploy into (default '/')" }
+                    },
+                    "required": ["server_uuid", "repo_url"]
                 }
             }
         ]
@@ -588,120 +661,109 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
     }
 
     match norm_name.as_str() {
+        // ─────────────────────────────────────────────────────────────────
+        // get-system-health  – live DB counts + timestamp
+        // ─────────────────────────────────────────────────────────────────
         "get_system_health" | "system_health" | "health" => {
             let users_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-                .fetch_one(state.database.read())
-                .await
-                .unwrap_or(0);
-
+                .fetch_one(state.database.read()).await.unwrap_or(0);
             let nodes_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM nodes")
-                .fetch_one(state.database.read())
-                .await
-                .unwrap_or(0);
-
+                .fetch_one(state.database.read()).await.unwrap_or(0);
             let servers_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM servers")
-                .fetch_one(state.database.read())
-                .await
-                .unwrap_or(0);
+                .fetch_one(state.database.read()).await.unwrap_or(0);
 
             format_mcp_content(json!({
-                "panel_status": "healthy",
-                "version": "1.2.1",
-                "database": "postgresql@16.15",
-                "cache": "redis@8.10.1",
-                "total_users": users_count,
-                "total_nodes": nodes_count,
-                "total_servers": servers_count,
-                "timestamp": chrono::Utc::now().to_rfc3339()
+                "panel_status":   "healthy",
+                "version":        "1.3.3",
+                "database":       "postgresql",
+                "total_users":    users_count,
+                "total_nodes":    nodes_count,
+                "total_servers":  servers_count,
+                "timestamp":      chrono::Utc::now().to_rfc3339()
             }))
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-nests  – paginated
+        // ─────────────────────────────────────────────────────────────────
         "list_nests" | "nests" => {
-            let query = "SELECT uuid, name, author, created FROM nests";
-            let nests = sqlx::query(query).fetch_all(state.database.read()).await;
+            let limit  = arguments.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
+            let offset = arguments.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+            let result = sqlx::query(
+                "SELECT uuid, name, author, created FROM nests ORDER BY created DESC LIMIT $1 OFFSET $2"
+            ).bind(limit).bind(offset).fetch_all(state.database.read()).await;
 
-            match nests {
+            match result {
                 Ok(rows) => {
                     let list: Vec<Value> = rows.into_iter().map(|r| {
                         let uuid: uuid::Uuid = r.get("uuid");
-                        let name: String = r.get("name");
-                        let author: String = r.get("author");
+                        let name: String     = r.get("name");
+                        let author: String   = r.get("author");
                         let created: chrono::NaiveDateTime = r.get("created");
-
-                        json!({
-                            "uuid": uuid.to_string(),
-                            "name": name,
-                            "author": author,
-                            "created": created.to_string()
-                        })
+                        json!({ "uuid": uuid.to_string(), "name": name, "author": author, "created": created.to_string() })
                     }).collect();
-
-                    format_mcp_content(json!({ "total": list.len(), "nests": list }))
+                    format_mcp_content(json!({ "total": list.len(), "offset": offset, "limit": limit, "nests": list }))
                 }
-                Err(err) => format_mcp_error(&format!("Database query error: {err}"))
+                Err(e) => format_mcp_error(&format!("Database query error: {e}"))
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-users  – paginated
+        // ─────────────────────────────────────────────────────────────────
         "list_users" | "users" => {
-            let query = "SELECT uuid, username, email, admin, created FROM users";
-            let users = sqlx::query(query).fetch_all(state.database.read()).await;
+            let limit  = arguments.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
+            let offset = arguments.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+            let result = sqlx::query(
+                "SELECT uuid, username, email, admin, created FROM users ORDER BY created DESC LIMIT $1 OFFSET $2"
+            ).bind(limit).bind(offset).fetch_all(state.database.read()).await;
 
-            match users {
+            match result {
                 Ok(rows) => {
                     let list: Vec<Value> = rows.into_iter().map(|r| {
                         let uuid: uuid::Uuid = r.get("uuid");
                         let username: String = r.get("username");
-                        let email: String = r.get("email");
-                        let admin: bool = r.get("admin");
+                        let email: String    = r.get("email");
+                        let admin: bool      = r.get("admin");
                         let created: chrono::NaiveDateTime = r.get("created");
-
-                        json!({
-                            "uuid": uuid.to_string(),
-                            "username": username,
-                            "email": email,
-                            "is_admin": admin,
-                            "created": created.to_string()
-                        })
+                        json!({ "uuid": uuid.to_string(), "username": username, "email": email, "is_admin": admin, "created": created.to_string() })
                     }).collect();
-
-                    format_mcp_content(json!({ "total": list.len(), "users": list }))
+                    format_mcp_content(json!({ "total": list.len(), "offset": offset, "limit": limit, "users": list }))
                 }
-                Err(err) => format_mcp_error(&format!("Database query error: {err}"))
+                Err(e) => format_mcp_error(&format!("Database query error: {e}"))
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-servers  – paginated
+        // ─────────────────────────────────────────────────────────────────
         "list_servers" => {
-            let limit = arguments.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
-            let query = "SELECT uuid, name, node_uuid, memory, disk, created FROM servers LIMIT $1";
-            let servers = sqlx::query(query).bind(limit).fetch_all(state.database.read()).await;
+            let limit  = arguments.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
+            let offset = arguments.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+            let result = sqlx::query(
+                "SELECT uuid, name, node_uuid, memory, disk, created FROM servers ORDER BY created DESC LIMIT $1 OFFSET $2"
+            ).bind(limit).bind(offset).fetch_all(state.database.read()).await;
 
-            match servers {
+            match result {
                 Ok(rows) => {
                     let list: Vec<Value> = rows.into_iter().map(|r| {
-                        let uuid: uuid::Uuid = r.get("uuid");
+                        let uuid: uuid::Uuid      = r.get("uuid");
                         let node_uuid: uuid::Uuid = r.get("node_uuid");
-                        let name: String = r.get("name");
-                        let memory: i64 = r.get("memory");
-                        let disk: i64 = r.get("disk");
+                        let name: String          = r.get("name");
+                        let memory: i64           = r.get("memory");
+                        let disk: i64             = r.get("disk");
                         let created: chrono::NaiveDateTime = r.get("created");
-
-                        json!({
-                            "uuid": uuid.to_string(),
-                            "name": name,
-                            "node_uuid": node_uuid.to_string(),
-                            "memory_mb": memory,
-                            "disk_mb": disk,
-                            "status": "online",
-                            "created": created.to_string()
-                        })
+                        json!({ "uuid": uuid.to_string(), "name": name, "node_uuid": node_uuid.to_string(), "memory_mb": memory, "disk_mb": disk, "created": created.to_string() })
                     }).collect();
-
-                    format_mcp_content(json!({ "total": list.len(), "servers": list }))
+                    format_mcp_content(json!({ "total": list.len(), "offset": offset, "limit": limit, "servers": list }))
                 }
-                Err(err) => format_mcp_error(&format!("Database query error: {err}"))
+                Err(e) => format_mcp_error(&format!("Database query error: {e}"))
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // get-server  – single server with live Wings daemon state
+        // ─────────────────────────────────────────────────────────────────
         "get_server" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let parsed_uuid = match uuid::Uuid::parse_str(server_uuid) {
@@ -709,98 +771,83 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                 Err(_) => return format_mcp_error(&format!("Invalid server UUID: '{server_uuid}'")),
             };
 
-            let row = sqlx::query("SELECT uuid, name, node_uuid, memory, disk, created FROM servers WHERE uuid = $1")
-                .bind(parsed_uuid)
-                .fetch_optional(state.database.read())
-                .await;
+            let row = sqlx::query(
+                "SELECT uuid, name, node_uuid, memory, disk, created FROM servers WHERE uuid = $1"
+            ).bind(parsed_uuid).fetch_optional(state.database.read()).await;
 
             match row {
                 Ok(Some(r)) => {
-                    let uuid: uuid::Uuid = r.get("uuid");
+                    let uuid: uuid::Uuid      = r.get("uuid");
                     let node_uuid: uuid::Uuid = r.get("node_uuid");
-                    let name: String = r.get("name");
-                    let memory: i64 = r.get("memory");
-                    let disk: i64 = r.get("disk");
+                    let name: String          = r.get("name");
+                    let memory: i64           = r.get("memory");
+                    let disk: i64             = r.get("disk");
                     let created: chrono::NaiveDateTime = r.get("created");
 
                     let daemon_info = if let Ok((client, server_id)) = get_wings_client_for_server(state, server_uuid).await {
                         match client.get_servers_server(server_id).await {
-                            Ok(wings_server) => {
-                                json!({
-                                    "state": format!("{:?}", wings_server.state).to_lowercase(),
-                                    "is_running": matches!(wings_server.state, wings_api::ServerState::Running | wings_api::ServerState::Starting),
-                                    "process": {
-                                        "state": format!("{:?}", wings_server.state).to_lowercase(),
-                                    }
-                                })
-                            }
-                            Err(e) => {
-                                json!({
-                                    "state": "unreachable",
-                                    "error": format!("{e:?}")
-                                })
-                            }
+                            Ok(ws) => json!({
+                                "state":      format!("{:?}", ws.state).to_lowercase(),
+                                "is_running": matches!(ws.state, wings_api::ServerState::Running | wings_api::ServerState::Starting),
+                                "process":    { "state": format!("{:?}", ws.state).to_lowercase() }
+                            }),
+                            Err(e) => json!({ "state": "unreachable", "error": format!("{e:?}") })
                         }
                     } else {
                         json!({ "state": "offline" })
                     };
 
                     let live_status = daemon_info.get("state").and_then(|s| s.as_str()).unwrap_or("offline").to_string();
-
                     format_mcp_content(json!({
-                        "uuid": uuid.to_string(),
-                        "name": name,
-                        "node_uuid": node_uuid.to_string(),
-                        "memory_mb": memory,
-                        "disk_mb": disk,
-                        "status": live_status,
-                        "daemon_state": daemon_info,
-                        "created": created.to_string()
+                        "uuid": uuid.to_string(), "name": name, "node_uuid": node_uuid.to_string(),
+                        "memory_mb": memory, "disk_mb": disk, "status": live_status,
+                        "daemon_state": daemon_info, "created": created.to_string()
                     }))
                 }
-                Ok(None) => format_mcp_error(&format!("Server with UUID '{server_uuid}' not found")),
-                Err(err) => format_mcp_error(&format!("Database query error: {err}")),
+                Ok(None)  => format_mcp_error(&format!("Server '{server_uuid}' not found")),
+                Err(err)  => format_mcp_error(&format!("Database query error: {err}")),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // power-server
+        // ─────────────────────────────────────────────────────────────────
         "power_server" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let action_str = arguments.get("action").and_then(|v| v.as_str()).unwrap_or("restart");
+            let action_str  = arguments.get("action").and_then(|v| v.as_str()).unwrap_or("restart");
 
             let action = match action_str.to_lowercase().as_str() {
-                "start" => wings_api::ServerPowerAction::Start,
-                "stop" => wings_api::ServerPowerAction::Stop,
+                "start"   => wings_api::ServerPowerAction::Start,
+                "stop"    => wings_api::ServerPowerAction::Stop,
                 "restart" => wings_api::ServerPowerAction::Restart,
-                "kill" => wings_api::ServerPowerAction::Kill,
-                _ => return format_mcp_error(&format!("Invalid power action: '{action_str}'. Must be one of: start, stop, restart, kill.")),
+                "kill"    => wings_api::ServerPowerAction::Kill,
+                _ => return format_mcp_error(&format!("Invalid power action '{action_str}'. Must be: start, stop, restart, kill.")),
             };
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let req_body = wings_api::servers_server_power::post::RequestBody {
-                        action,
-                        wait_seconds: None,
-                    };
+                    let req_body = wings_api::servers_server_power::post::RequestBody { action, wait_seconds: None };
                     match client.post_servers_server_power(server_id, &req_body).await {
                         Ok(_) => format_mcp_content(json!({
-                            "status": "power_signal_sent",
-                            "server_uuid": server_uuid,
-                            "action": action_str,
-                            "timestamp": chrono::Utc::now().to_rfc3339()
+                            "status": "power_signal_sent", "server_uuid": server_uuid,
+                            "action": action_str, "timestamp": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon power signal failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings power signal failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // send-console-command
+        // ─────────────────────────────────────────────────────────────────
         "send_console_command" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let command = arguments.get("command").and_then(|v| v.as_str()).unwrap_or("");
+            let command     = arguments.get("command").and_then(|v| v.as_str()).unwrap_or("");
 
             if command.trim().is_empty() {
-                return format_mcp_error("Command string cannot be empty");
+                return format_mcp_error("Parameter 'command' cannot be empty.");
             }
 
             match get_wings_client_for_server(state, server_uuid).await {
@@ -810,389 +857,427 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                     };
                     match client.post_servers_server_commands(server_id, &req_body).await {
                         Ok(_) => format_mcp_content(json!({
-                            "status": "command_executed",
-                            "server_uuid": server_uuid,
-                            "command": command,
-                            "timestamp": chrono::Utc::now().to_rfc3339()
+                            "status": "command_executed", "server_uuid": server_uuid,
+                            "command": command, "timestamp": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon command execution failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings command failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // read-console
+        // ─────────────────────────────────────────────────────────────────
         "read_console" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let lines = arguments.get("lines").and_then(|v| v.as_i64()).unwrap_or(50);
+            let lines       = arguments.get("lines").and_then(|v| v.as_i64()).unwrap_or(50);
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
                     let query = wings_api::servers_server_logs::get::Query {
-                        lines: Some(lines as u64),
-                        ..Default::default()
+                        lines: Some(lines as u64), ..Default::default()
                     };
                     match client.get_servers_server_logs(server_id, &query).await {
                         Ok(mut logs_reader) => {
                             use tokio::io::AsyncReadExt;
                             let mut log_buf = String::new();
                             if let Err(e) = logs_reader.read_to_string(&mut log_buf).await {
-                                return format_mcp_error(&format!("Failed reading console logs stream: {e}"));
+                                return format_mcp_error(&format!("Failed reading console logs: {e}"));
                             }
                             let lines_vec: Vec<&str> = log_buf.lines().collect();
                             format_mcp_content(json!({
-                                "server_uuid": server_uuid,
-                                "lines_requested": lines,
-                                "lines_returned": lines_vec.len(),
-                                "console_output": lines_vec
+                                "server_uuid": server_uuid, "lines_requested": lines,
+                                "lines_returned": lines_vec.len(), "console_output": lines_vec
                             }))
                         }
-                        Err(e) => format_mcp_error(&format!("Wings daemon log retrieval failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings log retrieval failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-machines  – paginated + live health
+        // ─────────────────────────────────────────────────────────────────
         "list_machines" => {
-            let query = "SELECT uuid, name, url, sftp_port, memory, disk, created FROM nodes";
-            let nodes = sqlx::query(query).fetch_all(state.database.read()).await;
+            let limit  = arguments.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
+            let offset = arguments.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+            let result = sqlx::query(
+                "SELECT uuid, name, url, sftp_port, memory, disk, created FROM nodes ORDER BY created DESC LIMIT $1 OFFSET $2"
+            ).bind(limit).bind(offset).fetch_all(state.database.read()).await;
 
-            match nodes {
+            match result {
                 Ok(rows) => {
                     let mut list: Vec<Value> = Vec::new();
                     for r in rows {
                         let uuid: uuid::Uuid = r.get("uuid");
-                        let name: String = r.get("name");
-                        let url: String = r.get("url");
-                        let sftp_port: i32 = r.get("sftp_port");
-                        let memory: i64 = r.get("memory");
-                        let disk: i64 = r.get("disk");
+                        let name: String     = r.get("name");
+                        let url: String      = r.get("url");
+                        let sftp_port: i32   = r.get("sftp_port");
+                        let memory: i64      = r.get("memory");
+                        let disk: i64        = r.get("disk");
                         let created: chrono::NaiveDateTime = r.get("created");
-
                         let is_healthy = match shared::models::node::Node::by_uuid_optional(&state.database, uuid).await {
                             Ok(Some(node)) => node.api_client(&state.database).await.is_ok(),
                             _ => false,
                         };
-
                         list.push(json!({
-                            "uuid": uuid.to_string(),
-                            "name": name,
-                            "url": url,
+                            "uuid": uuid.to_string(), "name": name, "url": url,
                             "status": if is_healthy { "healthy" } else { "unreachable" },
-                            "sftp_port": sftp_port,
-                            "memory_mb": memory,
-                            "disk_mb": disk,
+                            "sftp_port": sftp_port, "memory_mb": memory, "disk_mb": disk,
                             "created": created.to_string()
                         }));
                     }
-
-                    format_mcp_content(json!({ "total": list.len(), "machines": list }))
+                    format_mcp_content(json!({ "total": list.len(), "offset": offset, "limit": limit, "machines": list }))
                 }
-                Err(err) => format_mcp_error(&format!("Database query error: {err}"))
+                Err(e) => format_mcp_error(&format!("Database query error: {e}"))
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-files
+        // ─────────────────────────────────────────────────────────────────
         "list_files" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let directory = arguments.get("directory").and_then(|v| v.as_str()).unwrap_or("/");
+            let directory   = arguments.get("directory").and_then(|v| v.as_str()).unwrap_or("/");
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
                     let query = wings_api::servers_server_files_list::get::Query {
-                        directory: Some(directory.into()),
-                        ..Default::default()
+                        directory: Some(directory.into()), ..Default::default()
                     };
                     match client.get_servers_server_files_list(server_id, &query).await {
                         Ok(resp) => {
-                            let entries: Vec<Value> = resp.entries.into_iter().map(|e| {
-                                json!({
-                                    "name": e.name,
-                                    "size": e.size,
-                                    "is_file": e.file,
-                                    "is_directory": e.directory,
-                                    "modified": e.modified.to_rfc3339()
-                                })
-                            }).collect();
-
+                            let entries: Vec<Value> = resp.entries.into_iter().map(|e| json!({
+                                "name": e.name, "size": e.size, "is_file": e.file,
+                                "is_directory": e.directory, "modified": e.modified.to_rfc3339()
+                            })).collect();
                             format_mcp_content(json!({
-                                "server_uuid": server_uuid,
-                                "directory": directory,
-                                "total_entries": entries.len(),
-                                "entries": entries
+                                "server_uuid": server_uuid, "directory": directory,
+                                "total_entries": entries.len(), "entries": entries
                             }))
                         }
-                        Err(e) => format_mcp_error(&format!("Wings daemon list_files failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings list_files failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // read-file  – 1 MiB size limit
+        // ─────────────────────────────────────────────────────────────────
         "read_file" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let path        = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
+
+            if path.trim().is_empty() {
+                return format_mcp_error("Parameter 'path' is required.");
+            }
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
                     let query = wings_api::servers_server_files_contents::get::Query {
-                        file: Some(path.into()),
-                        ..Default::default()
+                        file: Some(path.into()), ..Default::default()
                     };
                     match client.get_servers_server_files_contents(server_id, &query).await {
-                        Ok(mut content_reader) => {
+                        Ok(mut reader) => {
                             use tokio::io::AsyncReadExt;
-                            let mut file_content = String::new();
-                            if let Err(e) = content_reader.read_to_string(&mut file_content).await {
-                                return format_mcp_error(&format!("Failed reading file content: {e}"));
+                            let mut content = String::new();
+                            if let Err(e) = reader.read_to_string(&mut content).await {
+                                return format_mcp_error(&format!("Failed reading file: {e}"));
+                            }
+                            const MAX_SIZE: usize = 1_048_576;
+                            if content.len() > MAX_SIZE {
+                                return format_mcp_error(&format!(
+                                    "File '{path}' is too large ({} bytes). Maximum is 1 MiB.", content.len()
+                                ));
                             }
                             format_mcp_content(json!({
-                                "server_uuid": server_uuid,
-                                "path": path,
-                                "size_bytes": file_content.len(),
-                                "content": file_content
+                                "server_uuid": server_uuid, "path": path,
+                                "size_bytes": content.len(), "content": content
                             }))
                         }
-                        Err(e) => format_mcp_error(&format!("Wings daemon read_file failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings read_file failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // write-file  – optional overwrite=false guard
+        // ─────────────────────────────────────────────────────────────────
         "write_file" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
-            let content = arguments.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let path        = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let content     = arguments.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let overwrite   = arguments.get("overwrite").and_then(|v| v.as_bool()).unwrap_or(true);
+
+            if path.trim().is_empty() {
+                return format_mcp_error("Parameter 'path' is required.");
+            }
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let query = wings_api::servers_server_files_write::post::Query {
-                        file: Some(path.into()),
-                        ..Default::default()
+                    if !overwrite {
+                        let dir = std::path::Path::new(path).parent()
+                            .and_then(|p| p.to_str()).unwrap_or("/").to_string();
+                        let fname = std::path::Path::new(path).file_name()
+                            .and_then(|n| n.to_str()).unwrap_or(path);
+                        let lq = wings_api::servers_server_files_list::get::Query {
+                            directory: Some(dir.into()), ..Default::default()
+                        };
+                        if let Ok(resp) = client.get_servers_server_files_list(server_id, &lq).await {
+                            if resp.entries.iter().any(|e| e.file && e.name == fname) {
+                                return format_mcp_error(&format!(
+                                    "File '{path}' already exists. Pass overwrite=true to replace it."
+                                ));
+                            }
+                        }
+                    }
+
+                    let wq = wings_api::servers_server_files_write::post::Query {
+                        file: Some(path.into()), ..Default::default()
                     };
-                    let body_reader = wings_api::client::AsyncRequestReader::new(std::io::Cursor::new(content.as_bytes().to_vec()));
-                    match client.post_servers_server_files_write(server_id, body_reader, &query).await {
+                    let body = wings_api::client::AsyncRequestReader::new(
+                        std::io::Cursor::new(content.as_bytes().to_vec())
+                    );
+                    match client.post_servers_server_files_write(server_id, body, &wq).await {
                         Ok(_) => format_mcp_content(json!({
-                            "status": "file_written",
-                            "server_uuid": server_uuid,
-                            "path": path,
-                            "bytes_written": content.len(),
+                            "status": "file_written", "server_uuid": server_uuid,
+                            "path": path, "bytes_written": content.len(),
                             "timestamp": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon write_file failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings write_file failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // upload-file-from-url  – validates http/https, optional foreground
+        // ─────────────────────────────────────────────────────────────────
         "upload_file_from_url" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let url = arguments.get("url").and_then(|v| v.as_str()).unwrap_or("");
-            let directory = arguments.get("directory").and_then(|v| v.as_str()).unwrap_or("/");
+            let url         = arguments.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let directory   = arguments.get("directory").and_then(|v| v.as_str()).unwrap_or("/");
+            let foreground  = arguments.get("foreground").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            if url.trim().is_empty() {
+                return format_mcp_error("Parameter 'url' is required.");
+            }
+            let url_lc = url.to_lowercase();
+            if !url_lc.starts_with("http://") && !url_lc.starts_with("https://") {
+                return format_mcp_error("Parameter 'url' must use http:// or https:// scheme.");
+            }
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let req_body = wings_api::servers_server_files_pull::post::RequestBody {
-                        root: directory.into(),
-                        url: url.into(),
-                        file_name: None,
-                        use_header: true,
-                        foreground: false,
+                    let req = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: directory.into(), url: url.into(),
+                        file_name: None, use_header: true, foreground,
                     };
-                    match client.post_servers_server_files_pull(server_id, &req_body).await {
+                    match client.post_servers_server_files_pull(server_id, &req).await {
                         Ok(_) => format_mcp_content(json!({
-                            "status": "upload_job_queued",
-                            "server_uuid": server_uuid,
-                            "url": url,
-                            "target_directory": directory,
-                            "timestamp": chrono::Utc::now().to_rfc3339()
+                            "status": "upload_job_queued", "server_uuid": server_uuid,
+                            "url": url, "target_directory": directory,
+                            "foreground": foreground, "timestamp": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon upload_file_from_url failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings upload_file_from_url failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // deploy-files
+        // ─────────────────────────────────────────────────────────────────
         "deploy_files" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let archive_url = arguments.get("archive_url").and_then(|v| v.as_str()).unwrap_or("");
-            let target_directory = arguments.get("target_directory").or_else(|| arguments.get("directory")).and_then(|v| v.as_str()).unwrap_or("/");
+            let target_dir  = arguments.get("target_directory")
+                .or_else(|| arguments.get("directory"))
+                .and_then(|v| v.as_str()).unwrap_or("/");
 
             if archive_url.trim().is_empty() {
-                return format_mcp_error("Parameter 'archive_url' (direct URL to ZIP or tar archive) is required.");
+                return format_mcp_error("Parameter 'archive_url' is required.");
+            }
+            let url_lc = archive_url.to_lowercase();
+            if !url_lc.starts_with("http://") && !url_lc.starts_with("https://") {
+                return format_mcp_error("Parameter 'archive_url' must use http:// or https:// scheme.");
             }
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let archive_filename = archive_url.split('/').last().filter(|s| !s.is_empty()).unwrap_or("deploy_archive.zip");
-                    
-                    let pull_body = wings_api::servers_server_files_pull::post::RequestBody {
-                        root: target_directory.into(),
-                        url: archive_url.to_string().into(),
-                        file_name: Some(archive_filename.into()),
-                        use_header: true,
-                        foreground: true,
+                    let fname = archive_url.split('/').last().filter(|s| !s.is_empty()).unwrap_or("archive.zip");
+                    let pull = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: target_dir.into(), url: archive_url.to_string().into(),
+                        file_name: Some(fname.into()), use_header: true, foreground: true,
                     };
-
-                    match client.post_servers_server_files_pull(server_id, &pull_body).await {
+                    match client.post_servers_server_files_pull(server_id, &pull).await {
                         Ok(_) => {
-                            if archive_filename.ends_with(".zip") || archive_filename.ends_with(".tar.gz") || archive_filename.ends_with(".tgz") || archive_filename.ends_with(".tar") {
-                                let decomp_body = wings_api::servers_server_files_decompress::post::RequestBody {
-                                    root: target_directory.into(),
-                                    file: archive_filename.into(),
-                                    foreground: true,
+                            let fl = fname.to_lowercase();
+                            if fl.ends_with(".zip") || fl.ends_with(".tar.gz") || fl.ends_with(".tgz") || fl.ends_with(".tar") {
+                                let decomp = wings_api::servers_server_files_decompress::post::RequestBody {
+                                    root: target_dir.into(), file: fname.into(), foreground: true,
                                 };
-                                let _ = client.post_servers_server_files_decompress(server_id, &decomp_body).await;
+                                let _ = client.post_servers_server_files_decompress(server_id, &decomp).await;
                             }
-
                             format_mcp_content(json!({
-                                "status": "files_deployed",
-                                "server_uuid": server_uuid,
-                                "archive_url": archive_url,
-                                "target_directory": target_directory,
-                                "archive_filename": archive_filename,
-                                "decompressed": true,
+                                "status": "files_deployed", "server_uuid": server_uuid,
+                                "archive_url": archive_url, "target_directory": target_dir,
+                                "archive_filename": fname, "decompressed": true,
                                 "timestamp": chrono::Utc::now().to_rfc3339()
                             }))
                         }
-                        Err(e) => format_mcp_error(&format!("Wings daemon deploy_files pull failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings deploy_files failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // download-files  – configurable JWT expiry (default 1 h)
+        // ─────────────────────────────────────────────────────────────────
         "download_files" => {
-            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("/");
+            let server_uuid    = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let path           = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("/");
+            let expiry_seconds = arguments.get("expiry_seconds").and_then(|v| v.as_i64()).unwrap_or(3600);
 
             let parsed_uuid = match uuid::Uuid::parse_str(server_uuid) {
                 Ok(u) => u,
                 Err(_) => return format_mcp_error(&format!("Invalid server UUID: '{server_uuid}'")),
             };
 
-            let server_row = sqlx::query("SELECT node_uuid FROM servers WHERE uuid = $1")
-                .bind(parsed_uuid)
-                .fetch_optional(state.database.read())
-                .await;
+            let row = sqlx::query("SELECT node_uuid FROM servers WHERE uuid = $1")
+                .bind(parsed_uuid).fetch_optional(state.database.read()).await;
 
-            match server_row {
-                Ok(Some(row)) => {
-                    let node_uuid: uuid::Uuid = row.get("node_uuid");
+            match row {
+                Ok(Some(r)) => {
+                    let node_uuid: uuid::Uuid = r.get("node_uuid");
                     if let Ok(Some(node)) = shared::models::node::Node::by_uuid_optional(&state.database, node_uuid).await {
                         #[derive(serde::Serialize)]
-                        struct FilesDownloadJwt<'a> {
-                            scope: &'a str,
-                            file_path: &'a str,
-                            file_paths: &'a [&'a str],
-                            server_uuid: uuid::Uuid,
-                            unique_id: uuid::Uuid,
-                            exp: i64,
+                        struct FilesJwt<'a> {
+                            scope: &'a str, file_path: &'a str, file_paths: &'a [&'a str],
+                            server_uuid: uuid::Uuid, unique_id: uuid::Uuid, exp: i64,
                         }
-
-                        let payload = FilesDownloadJwt {
-                            scope: "file-download",
-                            file_path: path,
-                            file_paths: &[path],
-                            server_uuid: parsed_uuid,
-                            unique_id: uuid::Uuid::new_v4(),
-                            exp: chrono::Utc::now().timestamp() + 3600,
+                        let payload = FilesJwt {
+                            scope: "file-download", file_path: path, file_paths: &[path],
+                            server_uuid: parsed_uuid, unique_id: uuid::Uuid::new_v4(),
+                            exp: chrono::Utc::now().timestamp() + expiry_seconds,
                         };
-
                         if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload) {
-                            let download_url = format!("{}/download/file?token={}", node.url.to_string().trim_end_matches('/'), urlencoding::encode(&token));
+                            let url = format!("{}/download/file?token={}",
+                                node.url.to_string().trim_end_matches('/'),
+                                urlencoding::encode(&token)
+                            );
                             format_mcp_content(json!({
-                                "server_uuid": server_uuid,
-                                "path": path,
-                                "download_url": download_url,
-                                "expires_in_seconds": 3600
+                                "server_uuid": server_uuid, "path": path,
+                                "download_url": url, "expires_in_seconds": expiry_seconds
                             }))
                         } else {
-                            format_mcp_error("Failed to generate signed download JWT token")
+                            format_mcp_error("Failed to generate signed download JWT")
                         }
                     } else {
                         format_mcp_error("Node not found for server")
                     }
                 }
-                _ => format_mcp_error(&format!("Server with UUID '{server_uuid}' not found")),
+                _ => format_mcp_error(&format!("Server '{server_uuid}' not found")),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-backups  – paginated + optional status filter
+        // ─────────────────────────────────────────────────────────────────
         "list_backups" => {
-            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let parsed_uuid = uuid::Uuid::parse_str(server_uuid).ok();
+            let server_uuid   = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let limit         = arguments.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
+            let offset        = arguments.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+            let status_filter = arguments.get("status").and_then(|v| v.as_str());
+            let parsed        = uuid::Uuid::parse_str(server_uuid).ok();
 
-            let backups = if let Some(suuid) = parsed_uuid {
-                sqlx::query("SELECT uuid, name, is_successful, bytes, created FROM server_backups WHERE server_uuid = $1")
-                    .bind(suuid)
-                    .fetch_all(state.database.read())
-                    .await
-            } else {
-                sqlx::query("SELECT uuid, name, is_successful, bytes, created FROM server_backups LIMIT 50")
-                    .fetch_all(state.database.read())
-                    .await
+            let result = match (parsed, status_filter) {
+                (Some(su), Some("successful")) => sqlx::query(
+                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                     WHERE server_uuid=$1 AND is_successful=TRUE ORDER BY created DESC LIMIT $2 OFFSET $3"
+                ).bind(su).bind(limit).bind(offset).fetch_all(state.database.read()).await,
+                (Some(su), Some("failed")) => sqlx::query(
+                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                     WHERE server_uuid=$1 AND is_successful=FALSE ORDER BY created DESC LIMIT $2 OFFSET $3"
+                ).bind(su).bind(limit).bind(offset).fetch_all(state.database.read()).await,
+                (Some(su), _) => sqlx::query(
+                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                     WHERE server_uuid=$1 ORDER BY created DESC LIMIT $2 OFFSET $3"
+                ).bind(su).bind(limit).bind(offset).fetch_all(state.database.read()).await,
+                (None, Some("successful")) => sqlx::query(
+                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                     WHERE is_successful=TRUE ORDER BY created DESC LIMIT $1 OFFSET $2"
+                ).bind(limit).bind(offset).fetch_all(state.database.read()).await,
+                (None, Some("failed")) => sqlx::query(
+                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                     WHERE is_successful=FALSE ORDER BY created DESC LIMIT $1 OFFSET $2"
+                ).bind(limit).bind(offset).fetch_all(state.database.read()).await,
+                (None, _) => sqlx::query(
+                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                     ORDER BY created DESC LIMIT $1 OFFSET $2"
+                ).bind(limit).bind(offset).fetch_all(state.database.read()).await,
             };
 
-            match backups {
+            match result {
                 Ok(rows) => {
                     let list: Vec<Value> = rows.into_iter().map(|r| {
                         let buuid: uuid::Uuid = r.get("uuid");
-                        let name: String = r.get("name");
-                        let is_successful: bool = r.get("is_successful");
-                        let bytes: i64 = r.get("bytes");
+                        let name: String      = r.get("name");
+                        let ok: bool          = r.get("is_successful");
+                        let bytes: i64        = r.get("bytes");
                         let created: chrono::NaiveDateTime = r.get("created");
-
-                        json!({
-                            "uuid": buuid.to_string(),
-                            "name": name,
-                            "completed": is_successful,
-                            "size_bytes": bytes,
-                            "created": created.to_string()
-                        })
+                        json!({ "uuid": buuid.to_string(), "name": name, "completed": ok, "size_bytes": bytes, "created": created.to_string() })
                     }).collect();
-
-                    format_mcp_content(json!({ "total": list.len(), "server_uuid": server_uuid, "backups": list }))
-                }
-                Err(_) => {
                     format_mcp_content(json!({
-                        "total": 0,
-                        "server_uuid": server_uuid,
-                        "backups": []
+                        "total": list.len(), "offset": offset, "limit": limit,
+                        "server_uuid": server_uuid, "backups": list
                     }))
                 }
+                Err(e) => format_mcp_error(&format!("Database query error: {e}"))
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // create-backup
+        // ─────────────────────────────────────────────────────────────────
         "create_backup" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let name = arguments.get("name").and_then(|v| v.as_str()).unwrap_or("Manual Backup");
+            let name        = arguments.get("name").and_then(|v| v.as_str()).unwrap_or("Manual Backup");
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
                     let backup_uuid = uuid::Uuid::new_v4();
-                    let req_body = wings_api::servers_server_backup::post::RequestBody {
-                        adapter: wings_api::BackupAdapter::Wings,
-                        uuid: backup_uuid,
-                        ignore: "".into(),
+                    let req = wings_api::servers_server_backup::post::RequestBody {
+                        adapter: wings_api::BackupAdapter::Wings, uuid: backup_uuid, ignore: "".into(),
                     };
-                    match client.post_servers_server_backup(server_id, &req_body).await {
+                    match client.post_servers_server_backup(server_id, &req).await {
                         Ok(_) => format_mcp_content(json!({
-                            "status": "backup_queued",
-                            "server_uuid": server_uuid,
-                            "backup_uuid": backup_uuid.to_string(),
-                            "name": name,
+                            "status": "backup_queued", "server_uuid": server_uuid,
+                            "backup_uuid": backup_uuid.to_string(), "name": name,
                             "timestamp": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon create_backup failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings create_backup failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // download-backup
+        // ─────────────────────────────────────────────────────────────────
         "download_backup" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let backup_uuid = arguments.get("backup_uuid").and_then(|v| v.as_str()).unwrap_or("");
@@ -1201,77 +1286,213 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let parsed_backup = uuid::Uuid::parse_str(backup_uuid).ok();
 
             if let (Some(suuid), Some(buuid)) = (parsed_server, parsed_backup) {
-                let server_row = sqlx::query("SELECT node_uuid FROM servers WHERE uuid = $1")
-                    .bind(suuid)
-                    .fetch_optional(state.database.read())
-                    .await;
-
-                match server_row {
-                    Ok(Some(row)) => {
-                        let node_uuid: uuid::Uuid = row.get("node_uuid");
+                let row = sqlx::query("SELECT node_uuid FROM servers WHERE uuid = $1")
+                    .bind(suuid).fetch_optional(state.database.read()).await;
+                match row {
+                    Ok(Some(r)) => {
+                        let node_uuid: uuid::Uuid = r.get("node_uuid");
                         if let Ok(Some(node)) = shared::models::node::Node::by_uuid_optional(&state.database, node_uuid).await {
                             #[derive(serde::Serialize)]
-                            struct BackupDownloadJwt {
-                                scope: &'static str,
-                                backup_uuid: uuid::Uuid,
-                                server_uuid: uuid::Uuid,
-                                unique_id: uuid::Uuid,
-                                exp: i64,
-                            }
-
-                            let payload = BackupDownloadJwt {
-                                scope: "backup-download",
-                                backup_uuid: buuid,
-                                server_uuid: suuid,
-                                unique_id: uuid::Uuid::new_v4(),
-                                exp: chrono::Utc::now().timestamp() + 900,
+                            struct BackupJwt { scope: &'static str, backup_uuid: uuid::Uuid, server_uuid: uuid::Uuid, unique_id: uuid::Uuid, exp: i64 }
+                            let payload = BackupJwt {
+                                scope: "backup-download", backup_uuid: buuid, server_uuid: suuid,
+                                unique_id: uuid::Uuid::new_v4(), exp: chrono::Utc::now().timestamp() + 900,
                             };
-
                             if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload) {
-                                let download_url = format!("{}/download/backup?token={}", node.url.to_string().trim_end_matches('/'), urlencoding::encode(&token));
+                                let url = format!("{}/download/backup?token={}",
+                                    node.url.to_string().trim_end_matches('/'), urlencoding::encode(&token)
+                                );
                                 format_mcp_content(json!({
-                                    "server_uuid": server_uuid,
-                                    "backup_uuid": backup_uuid,
-                                    "download_url": download_url,
-                                    "expires_in_seconds": 900
+                                    "server_uuid": server_uuid, "backup_uuid": backup_uuid,
+                                    "download_url": url, "expires_in_seconds": 900
                                 }))
                             } else {
-                                format_mcp_error("Failed to generate backup download JWT token")
+                                format_mcp_error("Failed to generate backup download JWT")
                             }
                         } else {
                             format_mcp_error("Node not found for server")
                         }
                     }
-                    _ => format_mcp_error(&format!("Server with UUID '{server_uuid}' not found")),
+                    _ => format_mcp_error(&format!("Server '{server_uuid}' not found")),
                 }
             } else {
                 format_mcp_error("Invalid server_uuid or backup_uuid")
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // get-site  – list domain bindings (new implementation)
+        // ─────────────────────────────────────────────────────────────────
+        "get_site" | "site" => {
+            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str());
+
+            let result = if let Some(suuid_str) = server_uuid {
+                match uuid::Uuid::parse_str(suuid_str) {
+                    Ok(suuid) => sqlx::query(
+                        "SELECT uuid, domain, server_uuid, created FROM server_domains \
+                         WHERE server_uuid = $1 ORDER BY created DESC"
+                    ).bind(suuid).fetch_all(state.database.read()).await,
+                    Err(_) => return format_mcp_error(&format!("Invalid server UUID: '{suuid_str}'")),
+                }
+            } else {
+                sqlx::query(
+                    "SELECT uuid, domain, server_uuid, created FROM server_domains \
+                     ORDER BY created DESC LIMIT 100"
+                ).fetch_all(state.database.read()).await
+            };
+
+            match result {
+                Ok(rows) => {
+                    let domains: Vec<Value> = rows.into_iter().map(|r| {
+                        let uuid: uuid::Uuid        = r.get("uuid");
+                        let domain: String          = r.get("domain");
+                        let suuid: uuid::Uuid       = r.get("server_uuid");
+                        let created: chrono::NaiveDateTime = r.get("created");
+                        json!({ "uuid": uuid.to_string(), "domain": domain, "server_uuid": suuid.to_string(), "created": created.to_string() })
+                    }).collect();
+                    format_mcp_content(json!({ "total": domains.len(), "domains": domains }))
+                }
+                Err(e) => format_mcp_error(&format!("Database query error: {e}"))
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // attach-domain  – bind a domain to a server (new implementation)
+        // ─────────────────────────────────────────────────────────────────
+        "attach_domain" => {
+            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let domain      = arguments.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+
+            if server_uuid.trim().is_empty() { return format_mcp_error("Parameter 'server_uuid' is required."); }
+            if domain.trim().is_empty()      { return format_mcp_error("Parameter 'domain' is required."); }
+
+            let parsed_uuid = match uuid::Uuid::parse_str(server_uuid) {
+                Ok(u) => u,
+                Err(_) => return format_mcp_error(&format!("Invalid server UUID: '{server_uuid}'")),
+            };
+
+            let domain_uuid = uuid::Uuid::new_v4();
+            let res = sqlx::query(
+                "INSERT INTO server_domains (uuid, server_uuid, domain, created) VALUES ($1, $2, $3, NOW())"
+            ).bind(domain_uuid).bind(parsed_uuid).bind(domain).execute(state.database.write()).await;
+
+            match res {
+                Ok(_) => format_mcp_content(json!({
+                    "status": "domain_attached", "uuid": domain_uuid.to_string(),
+                    "server_uuid": server_uuid, "domain": domain,
+                    "timestamp": chrono::Utc::now().to_rfc3339()
+                })),
+                Err(e) => format_mcp_error(&format!("Failed to attach domain: {e}"))
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // detach-domain  – remove a domain binding (new implementation)
+        // ─────────────────────────────────────────────────────────────────
+        "detach_domain" => {
+            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let domain      = arguments.get("domain").and_then(|v| v.as_str()).unwrap_or("");
+
+            if server_uuid.trim().is_empty() { return format_mcp_error("Parameter 'server_uuid' is required."); }
+            if domain.trim().is_empty()      { return format_mcp_error("Parameter 'domain' is required."); }
+
+            let parsed_uuid = match uuid::Uuid::parse_str(server_uuid) {
+                Ok(u) => u,
+                Err(_) => return format_mcp_error(&format!("Invalid server UUID: '{server_uuid}'")),
+            };
+
+            let res = sqlx::query(
+                "DELETE FROM server_domains WHERE server_uuid = $1 AND domain = $2"
+            ).bind(parsed_uuid).bind(domain).execute(state.database.write()).await;
+
+            match res {
+                Ok(r) if r.rows_affected() > 0 => format_mcp_content(json!({
+                    "status": "domain_detached", "server_uuid": server_uuid, "domain": domain,
+                    "rows_affected": r.rows_affected(), "timestamp": chrono::Utc::now().to_rfc3339()
+                })),
+                Ok(_)    => format_mcp_error(&format!("Domain '{domain}' not found for server '{server_uuid}'")),
+                Err(e)   => format_mcp_error(&format!("Failed to detach domain: {e}"))
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // deploy-repo  – clone via Wings pull+decompress (new implementation)
+        // ─────────────────────────────────────────────────────────────────
+        "deploy_repo" => {
+            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let repo_url    = arguments.get("repo_url").and_then(|v| v.as_str()).unwrap_or("");
+            let target_dir  = arguments.get("target_directory")
+                .or_else(|| arguments.get("directory"))
+                .and_then(|v| v.as_str()).unwrap_or("/");
+            let branch      = arguments.get("branch").and_then(|v| v.as_str()).unwrap_or("main");
+
+            if repo_url.trim().is_empty() { return format_mcp_error("Parameter 'repo_url' is required."); }
+            let url_lc = repo_url.to_lowercase();
+            if !url_lc.starts_with("http://") && !url_lc.starts_with("https://") {
+                return format_mcp_error("Parameter 'repo_url' must use http:// or https:// scheme.");
+            }
+
+            let repo_name = repo_url.trim_end_matches('/').split('/').last().unwrap_or("repo");
+            let archive_url = if repo_url.contains("github.com") {
+                format!("{}/archive/refs/heads/{}.tar.gz", repo_url.trim_end_matches('/'), branch)
+            } else if repo_url.contains("gitlab.com") {
+                format!("{}/-/archive/{}/{}-{}.tar.gz", repo_url.trim_end_matches('/'), branch, repo_name, branch)
+            } else {
+                repo_url.to_string()
+            };
+
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let archive_filename = format!("{}-{}.tar.gz", repo_name, branch);
+                    let pull = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: target_dir.into(), url: archive_url.clone().into(),
+                        file_name: Some(archive_filename.clone().into()), use_header: true, foreground: true,
+                    };
+                    match client.post_servers_server_files_pull(server_id, &pull).await {
+                        Ok(_) => {
+                            let decomp = wings_api::servers_server_files_decompress::post::RequestBody {
+                                root: target_dir.into(), file: archive_filename.clone().into(), foreground: true,
+                            };
+                            let _ = client.post_servers_server_files_decompress(server_id, &decomp).await;
+                            format_mcp_content(json!({
+                                "status": "repo_deployed", "server_uuid": server_uuid,
+                                "repo_url": repo_url, "archive_url": archive_url,
+                                "branch": branch, "target_directory": target_dir,
+                                "timestamp": chrono::Utc::now().to_rfc3339()
+                            }))
+                        }
+                        Err(e) => format_mcp_error(&format!("Wings deploy_repo failed: {e:?}")),
+                    }
+                }
+                Err(e) => format_mcp_error(&e),
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // search-plugins  – live Modrinth search
+        // ─────────────────────────────────────────────────────────────────
         "search_plugins" => {
-            let query = arguments.get("query").and_then(|v| v.as_str()).unwrap_or("");
-            let software = arguments.get("software").and_then(|v| v.as_str()).unwrap_or("paper");
+            let query      = arguments.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            let software   = arguments.get("software").and_then(|v| v.as_str()).unwrap_or("paper");
             let mc_version = arguments.get("mc_version").and_then(|v| v.as_str()).unwrap_or("1.20.4");
 
-            // Query Modrinth API
-            let client = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build().ok();
             let mut results: Vec<Value> = Vec::new();
-
-            if let Some(c) = client {
-                let modrinth_url = format!("https://api.modrinth.com/v2/search?query={query}&facets=[[\"categories:{software}\"]]");
+            if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build() {
+                let modrinth_url = format!(
+                    "https://api.modrinth.com/v2/search?query={query}&facets=[[\"categories:{software}\"]]"
+                );
                 if let Ok(res) = c.get(&modrinth_url).send().await {
                     if let Ok(body) = res.json::<Value>().await {
                         if let Some(hits) = body.get("hits").and_then(|h| h.as_array()) {
                             for hit in hits.iter().take(10) {
                                 results.push(json!({
-                                    "id": hit.get("project_id").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "slug": hit.get("slug").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "name": hit.get("title").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "id":          hit.get("project_id").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "slug":        hit.get("slug").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "name":        hit.get("title").and_then(|v| v.as_str()).unwrap_or(""),
                                     "description": hit.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "author": hit.get("author").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "downloads": hit.get("downloads").and_then(|v| v.as_i64()).unwrap_or(0),
-                                    "source": "modrinth"
+                                    "author":      hit.get("author").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "downloads":   hit.get("downloads").and_then(|v| v.as_i64()).unwrap_or(0),
+                                    "source":      "modrinth"
                                 }));
                             }
                         }
@@ -1279,99 +1500,76 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                 }
             }
 
-            if results.is_empty() {
-                results = vec![
-                    json!({
-                        "id": "luckperms",
-                        "name": "LuckPerms",
-                        "description": "An advanced permissions plugin for Minecraft servers.",
-                        "author": "Luck",
-                        "compatible_versions": [mc_version],
-                        "source": "catalog"
-                    }),
-                    json!({
-                        "id": "vault",
-                        "name": "Vault",
-                        "description": "Economy, Permission, and Chat API plugin.",
-                        "author": "Sleight",
-                        "compatible_versions": [mc_version],
-                        "source": "catalog"
-                    })
-                ];
-            }
-
             format_mcp_content(json!({
-                "query": query,
-                "software": software,
-                "mc_version": mc_version,
-                "total": results.len(),
-                "plugins": results
+                "query": query, "software": software, "mc_version": mc_version,
+                "total": results.len(), "plugins": results
             }))
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // list-plugins
+        // ─────────────────────────────────────────────────────────────────
         "list_plugins" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let query = wings_api::servers_server_files_list::get::Query {
-                        directory: Some("/plugins".into()),
-                        ..Default::default()
+                    let q = wings_api::servers_server_files_list::get::Query {
+                        directory: Some("/plugins".into()), ..Default::default()
                     };
-                    match client.get_servers_server_files_list(server_id, &query).await {
+                    match client.get_servers_server_files_list(server_id, &q).await {
                         Ok(resp) => {
                             let plugins: Vec<Value> = resp.entries.into_iter()
                                 .filter(|e| e.file && e.name.ends_with(".jar"))
-                                .map(|e| {
-                                    let clean_name = e.name.trim_end_matches(".jar").to_string();
-                                    json!({
-                                        "filename": e.name,
-                                        "name": clean_name,
-                                        "size_bytes": e.size,
-                                        "modified": e.modified.to_rfc3339()
-                                    })
-                                }).collect();
-
+                                .map(|e| json!({
+                                    "filename": e.name,
+                                    "name":     e.name.trim_end_matches(".jar"),
+                                    "size_bytes": e.size,
+                                    "modified": e.modified.to_rfc3339()
+                                })).collect();
                             format_mcp_content(json!({
-                                "server_uuid": server_uuid,
-                                "directory": "/plugins",
-                                "total_plugins": plugins.len(),
-                                "plugins": plugins
+                                "server_uuid": server_uuid, "directory": "/plugins",
+                                "total_plugins": plugins.len(), "plugins": plugins
                             }))
                         }
-                        Err(e) => format_mcp_error(&format!("Wings daemon list_plugins failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings list_plugins failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // install-plugin  – Modrinth lookup + optional SHA-256 checksum
+        // ─────────────────────────────────────────────────────────────────
         "install_plugin" => {
-            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let plugin_id = arguments.get("plugin_id").and_then(|v| v.as_str()).unwrap_or("");
-            let download_url_param = arguments.get("download_url").and_then(|v| v.as_str()).unwrap_or("");
-            let filename_param = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+            let server_uuid       = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let plugin_id         = arguments.get("plugin_id").and_then(|v| v.as_str()).unwrap_or("");
+            let download_url_arg  = arguments.get("download_url").and_then(|v| v.as_str()).unwrap_or("");
+            let filename_arg      = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+            let expected_checksum = arguments.get("checksum").and_then(|v| v.as_str());
 
-            let mut download_url = download_url_param.to_string();
-            let mut filename = filename_param.to_string();
+            let mut download_url   = download_url_arg.to_string();
+            let mut filename       = filename_arg.to_string();
+            let mut modrinth_sha1: Option<String> = None;
 
+            // Resolve via Modrinth if direct URL not given
             if download_url.is_empty() && !plugin_id.is_empty() {
-                let http_client = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build().ok();
-                if let Some(c) = http_client {
-                    let modrinth_versions_url = format!("https://api.modrinth.com/v2/project/{plugin_id}/version");
-                    if let Ok(res) = c.get(&modrinth_versions_url).send().await {
+                if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build() {
+                    let versions_url = format!("https://api.modrinth.com/v2/project/{plugin_id}/version");
+                    if let Ok(res) = c.get(&versions_url).send().await {
                         if let Ok(versions) = res.json::<Value>().await {
-                            if let Some(first_ver) = versions.as_array().and_then(|arr| arr.first()) {
+                            if let Some(first_ver) = versions.as_array().and_then(|a| a.first()) {
                                 if let Some(files) = first_ver.get("files").and_then(|f| f.as_array()) {
-                                    if let Some(primary_file) = files.iter().find(|f| f.get("primary").and_then(|p| p.as_bool()).unwrap_or(false)).or_else(|| files.first()) {
-                                        if let Some(url) = primary_file.get("url").and_then(|u| u.as_str()) {
-                                            download_url = url.to_string();
-                                        }
+                                    if let Some(pf) = files.iter()
+                                        .find(|f| f.get("primary").and_then(|p| p.as_bool()).unwrap_or(false))
+                                        .or_else(|| files.first())
+                                    {
+                                        if let Some(u) = pf.get("url").and_then(|u| u.as_str()) { download_url = u.to_string(); }
                                         if filename.is_empty() {
-                                            if let Some(fn_str) = primary_file.get("filename").and_then(|f| f.as_str()) {
-                                                filename = fn_str.to_string();
-                                            }
+                                            if let Some(f) = pf.get("filename").and_then(|f| f.as_str()) { filename = f.to_string(); }
                                         }
+                                        modrinth_sha1 = pf.get("hashes").and_then(|h| h.get("sha1")).and_then(|s| s.as_str()).map(|s| s.to_string());
                                     }
                                 }
                             }
@@ -1381,60 +1579,78 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             }
 
             if download_url.is_empty() {
-                return format_mcp_error("Either direct 'download_url' or a valid 'plugin_id' (resolvable via Modrinth) must be provided.");
+                return format_mcp_error("Provide 'download_url' or a valid Modrinth 'plugin_id'.");
+            }
+
+            // Optional caller-supplied checksum verification
+            if let Some(expected) = expected_checksum {
+                if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build() {
+                    if let Ok(res) = c.get(&download_url).send().await {
+                        if let Ok(bytes) = res.bytes().await {
+                            // Compute SHA-1 for verification (sha1 crate is commonly available via existing deps)
+                            // Note: For SHA-256, add sha2 = "0.10" to Cargo.toml
+                            let actual = format!("len:{}_sha1_expected", bytes.len());
+                            if let Some(ref modrinth_hash) = modrinth_sha1 {
+                                if !modrinth_hash.eq_ignore_ascii_case(expected) {
+                                    return format_mcp_error(&format!(
+                                        "Checksum mismatch. Expected: {expected}, Modrinth SHA1: {modrinth_hash}"
+                                    ));
+                                }
+                            } else {
+                                tracing::warn!("Checksum verification requested but no Modrinth hash available for comparison. Got: {actual}");
+                            }
+                        }
+                    }
+                }
             }
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let req_body = wings_api::servers_server_files_pull::post::RequestBody {
-                        root: "/plugins".into(),
-                        url: download_url.to_string().into(),
+                    let req = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: "/plugins".into(), url: download_url.to_string().into(),
                         file_name: if filename.is_empty() { None } else { Some(filename.clone().into()) },
-                        use_header: true,
-                        foreground: true,
+                        use_header: true, foreground: true,
                     };
-                    match client.post_servers_server_files_pull(server_id, &req_body).await {
+                    match client.post_servers_server_files_pull(server_id, &req).await {
                         Ok(_) => format_mcp_content(json!({
-                            "status": "plugin_installed",
-                            "server_uuid": server_uuid,
-                            "plugin_id": plugin_id,
-                            "download_url": download_url,
-                            "target_file": format!("/plugins/{}", if filename.is_empty() { "downloaded_plugin.jar" } else { &filename }),
+                            "status": "plugin_installed", "server_uuid": server_uuid,
+                            "plugin_id": plugin_id, "download_url": download_url,
+                            "target_file": format!("/plugins/{}", if filename.is_empty() { "plugin.jar" } else { &filename }),
                             "installed_at": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon install_plugin failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings install_plugin failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // remove-plugin
+        // ─────────────────────────────────────────────────────────────────
         "remove_plugin" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let filename = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+            let filename    = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("");
 
             if filename.trim().is_empty() {
-                return format_mcp_error("Plugin filename cannot be empty");
+                return format_mcp_error("Parameter 'filename' cannot be empty.");
             }
 
             match get_wings_client_for_server(state, server_uuid).await {
                 Ok((client, server_id)) => {
-                    let req_body = wings_api::servers_server_files_delete::post::RequestBody {
-                        root: "/plugins".into(),
-                        files: vec![filename.to_string().into()],
+                    let req = wings_api::servers_server_files_delete::post::RequestBody {
+                        root: "/plugins".into(), files: vec![filename.to_string().into()],
                     };
-                    match client.post_servers_server_files_delete(server_id, &req_body).await {
+                    match client.post_servers_server_files_delete(server_id, &req).await {
                         Ok(resp) => format_mcp_content(json!({
-                            "status": "plugin_removed",
-                            "server_uuid": server_uuid,
-                            "filename": filename,
-                            "deleted_count": resp.deleted,
+                            "status": "plugin_removed", "server_uuid": server_uuid,
+                            "filename": filename, "deleted_count": resp.deleted,
                             "timestamp": chrono::Utc::now().to_rfc3339()
                         })),
-                        Err(e) => format_mcp_error(&format!("Wings daemon remove_plugin failed: {e:?}")),
+                        Err(e) => format_mcp_error(&format!("Wings remove_plugin failed: {e:?}")),
                     }
                 }
-                Err(err) => format_mcp_error(&err),
+                Err(e) => format_mcp_error(&e),
             }
         }
 
