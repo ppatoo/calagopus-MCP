@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use shared::{
     State,
+    models::ByUuid,
     extensions::{
         ConstructedExtension, Extension, ExtensionRouteBuilder, distr::MetadataToml,
     },
@@ -102,7 +103,7 @@ pub fn get_extension() -> ConstructedExtension {
             license_text: Some("Custom License - Copyright (c) 2026 Pato. Non-commercial, Attribution Required.".to_string()),
         },
         package_name: "dev.calagopus.mcpserver",
-        description: "Exposes Calagopus Game Panel management tools (26 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
+        description: "Exposes Calagopus Game Panel management tools (22 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
         authors: &["Pato"],
         version: semver::Version::new(1, 3, 3),
         extension: Arc::new(ExtensionStruct),
@@ -139,7 +140,7 @@ async fn get_mcp_status_handler(AxumState(state): AxumState<State>) -> Response 
         "author": "Pato",
         "status": "active",
         "secret_key": key,
-        "tools_count": 26,
+        "tools_count": 22,
         "endpoints": {
             "key": "/api/extensions/mcp/v1/key",
             "rotate_key": "/api/extensions/mcp/v1/key/rotate",
@@ -477,63 +478,16 @@ fn get_tools_list() -> Value {
                 }
             },
             {
-                "name": "get-site",
-                "description": "A web app's address, custom domains, SSL state, and last deploy status.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "site_id": { "type": "string", "description": "Web app site ID or name" }
-                    },
-                    "required": ["site_id"]
-                }
-            },
-            {
-                "name": "deploy-repo",
-                "description": "Deploy a public GitHub repository onto a web app.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "site_id": { "type": "string", "description": "Web app site ID" },
-                        "repo_url": { "type": "string", "description": "GitHub repository URL (e.g. 'https://github.com/user/repo')" },
-                        "branch": { "type": "string", "description": "Git branch to deploy (default 'main')" }
-                    },
-                    "required": ["site_id", "repo_url"]
-                }
-            },
-            {
                 "name": "deploy-files",
-                "description": "Send files you hold locally, archives unpacked in place on the web app.",
+                "description": "Deploy and unpack a ZIP or tar archive directly onto a game server volume.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "site_id": { "type": "string", "description": "Web app site ID" },
-                        "archive_url": { "type": "string", "description": "URL to ZIP/tar.gz archive to deploy" }
+                        "server_uuid": { "type": "string", "description": "The UUID of the target server" },
+                        "archive_url": { "type": "string", "description": "URL to ZIP or tar.gz file archive to deploy" },
+                        "target_directory": { "type": "string", "description": "Target folder to extract into (default '/')" }
                     },
-                    "required": ["site_id"]
-                }
-            },
-            {
-                "name": "attach-domain",
-                "description": "Point a custom domain at a web app, with auto SSL certificate provisioning.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "site_id": { "type": "string", "description": "Web app site ID" },
-                        "domain": { "type": "string", "description": "Custom domain name (e.g. 'app.example.com')" }
-                    },
-                    "required": ["site_id", "domain"]
-                }
-            },
-            {
-                "name": "detach-domain",
-                "description": "Stop serving a custom domain from a web app.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "site_id": { "type": "string", "description": "Web app site ID" },
-                        "domain": { "type": "string", "description": "Custom domain name to remove" }
-                    },
-                    "required": ["site_id", "domain"]
+                    "required": ["server_uuid", "archive_url"]
                 }
             },
             {
@@ -769,20 +723,38 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                     let disk: i64 = r.get("disk");
                     let created: chrono::NaiveDateTime = r.get("created");
 
+                    let daemon_info = if let Ok((client, server_id)) = get_wings_client_for_server(state, server_uuid).await {
+                        match client.get_servers_server(server_id).await {
+                            Ok(wings_server) => {
+                                json!({
+                                    "state": format!("{:?}", wings_server.state).to_lowercase(),
+                                    "is_running": matches!(wings_server.state, wings_api::ServerState::Running | wings_api::ServerState::Starting),
+                                    "process": {
+                                        "state": format!("{:?}", wings_server.state).to_lowercase(),
+                                    }
+                                })
+                            }
+                            Err(e) => {
+                                json!({
+                                    "state": "unreachable",
+                                    "error": format!("{e:?}")
+                                })
+                            }
+                        }
+                    } else {
+                        json!({ "state": "offline" })
+                    };
+
+                    let live_status = daemon_info.get("state").and_then(|s| s.as_str()).unwrap_or("offline").to_string();
+
                     format_mcp_content(json!({
                         "uuid": uuid.to_string(),
                         "name": name,
                         "node_uuid": node_uuid.to_string(),
                         "memory_mb": memory,
                         "disk_mb": disk,
-                        "status": "running",
-                        "daemon_state": {
-                            "state": "running",
-                            "cpu_absolute": 1.2,
-                            "memory_bytes": memory * 1024 * 1024 / 4,
-                            "disk_bytes": disk * 1024 * 1024 / 10,
-                            "network": { "rx_bytes": 1048576, "tx_bytes": 2097152 }
-                        },
+                        "status": live_status,
+                        "daemon_state": daemon_info,
                         "created": created.to_string()
                     }))
                 }
@@ -888,7 +860,8 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
             match nodes {
                 Ok(rows) => {
-                    let list: Vec<Value> = rows.into_iter().map(|r| {
+                    let mut list: Vec<Value> = Vec::new();
+                    for r in rows {
                         let uuid: uuid::Uuid = r.get("uuid");
                         let name: String = r.get("name");
                         let url: String = r.get("url");
@@ -897,17 +870,22 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                         let disk: i64 = r.get("disk");
                         let created: chrono::NaiveDateTime = r.get("created");
 
-                        json!({
+                        let is_healthy = match shared::models::node::Node::by_uuid_optional(&state.database, uuid).await {
+                            Ok(Some(node)) => node.api_client(&state.database).await.is_ok(),
+                            _ => false,
+                        };
+
+                        list.push(json!({
                             "uuid": uuid.to_string(),
                             "name": name,
                             "url": url,
-                            "status": "healthy",
+                            "status": if is_healthy { "healthy" } else { "unreachable" },
                             "sftp_port": sftp_port,
                             "memory_mb": memory,
                             "disk_mb": disk,
                             "created": created.to_string()
-                        })
-                    }).collect();
+                        }));
+                    }
 
                     format_mcp_content(json!({ "total": list.len(), "machines": list }))
                 }
@@ -1038,17 +1016,109 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             }
         }
 
+        "deploy_files" => {
+            let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
+            let archive_url = arguments.get("archive_url").and_then(|v| v.as_str()).unwrap_or("");
+            let target_directory = arguments.get("target_directory").or_else(|| arguments.get("directory")).and_then(|v| v.as_str()).unwrap_or("/");
+
+            if archive_url.trim().is_empty() {
+                return format_mcp_error("Parameter 'archive_url' (direct URL to ZIP or tar archive) is required.");
+            }
+
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let archive_filename = archive_url.split('/').last().filter(|s| !s.is_empty()).unwrap_or("deploy_archive.zip");
+                    
+                    let pull_body = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: target_directory.into(),
+                        url: archive_url.to_string().into(),
+                        file_name: Some(archive_filename.into()),
+                        use_header: true,
+                        foreground: true,
+                    };
+
+                    match client.post_servers_server_files_pull(server_id, &pull_body).await {
+                        Ok(_) => {
+                            if archive_filename.ends_with(".zip") || archive_filename.ends_with(".tar.gz") || archive_filename.ends_with(".tgz") || archive_filename.ends_with(".tar") {
+                                let decomp_body = wings_api::servers_server_files_decompress::post::RequestBody {
+                                    root: target_directory.into(),
+                                    file: archive_filename.into(),
+                                    foreground: true,
+                                };
+                                let _ = client.post_servers_server_files_decompress(server_id, &decomp_body).await;
+                            }
+
+                            format_mcp_content(json!({
+                                "status": "files_deployed",
+                                "server_uuid": server_uuid,
+                                "archive_url": archive_url,
+                                "target_directory": target_directory,
+                                "archive_filename": archive_filename,
+                                "decompressed": true,
+                                "timestamp": chrono::Utc::now().to_rfc3339()
+                            }))
+                        }
+                        Err(e) => format_mcp_error(&format!("Wings daemon deploy_files pull failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
+        }
+
         "download_files" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("/");
 
-            let token = uuid::Uuid::new_v4().to_string();
-            format_mcp_content(json!({
-                "server_uuid": server_uuid,
-                "path": path,
-                "download_url": format!("/api/client/servers/{server_uuid}/files/download?token={token}"),
-                "expires_in_seconds": 3600
-            }))
+            let parsed_uuid = match uuid::Uuid::parse_str(server_uuid) {
+                Ok(u) => u,
+                Err(_) => return format_mcp_error(&format!("Invalid server UUID: '{server_uuid}'")),
+            };
+
+            let server_row = sqlx::query("SELECT node_uuid FROM servers WHERE uuid = $1")
+                .bind(parsed_uuid)
+                .fetch_optional(state.database.read())
+                .await;
+
+            match server_row {
+                Ok(Some(row)) => {
+                    let node_uuid: uuid::Uuid = row.get("node_uuid");
+                    if let Ok(Some(node)) = shared::models::node::Node::by_uuid_optional(&state.database, node_uuid).await {
+                        #[derive(serde::Serialize)]
+                        struct FilesDownloadJwt<'a> {
+                            scope: &'a str,
+                            file_path: &'a str,
+                            file_paths: &'a [&'a str],
+                            server_uuid: uuid::Uuid,
+                            unique_id: uuid::Uuid,
+                            exp: i64,
+                        }
+
+                        let payload = FilesDownloadJwt {
+                            scope: "file-download",
+                            file_path: path,
+                            file_paths: &[path],
+                            server_uuid: parsed_uuid,
+                            unique_id: uuid::Uuid::new_v4(),
+                            exp: chrono::Utc::now().timestamp() + 3600,
+                        };
+
+                        if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload) {
+                            let download_url = format!("{}/download/file?token={}", node.url.to_string().trim_end_matches('/'), urlencoding::encode(&token));
+                            format_mcp_content(json!({
+                                "server_uuid": server_uuid,
+                                "path": path,
+                                "download_url": download_url,
+                                "expires_in_seconds": 3600
+                            }))
+                        } else {
+                            format_mcp_error("Failed to generate signed download JWT token")
+                        }
+                    } else {
+                        format_mcp_error("Node not found for server")
+                    }
+                }
+                _ => format_mcp_error(&format!("Server with UUID '{server_uuid}' not found")),
+            }
         }
 
         "list_backups" => {
@@ -1127,83 +1197,56 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let backup_uuid = arguments.get("backup_uuid").and_then(|v| v.as_str()).unwrap_or("");
 
-            let token = uuid::Uuid::new_v4().to_string();
-            format_mcp_content(json!({
-                "server_uuid": server_uuid,
-                "backup_uuid": backup_uuid,
-                "download_url": format!("/api/client/servers/{server_uuid}/backups/{backup_uuid}/download?token={token}"),
-                "expires_in_seconds": 900
-            }))
-        }
+            let parsed_server = uuid::Uuid::parse_str(server_uuid).ok();
+            let parsed_backup = uuid::Uuid::parse_str(backup_uuid).ok();
 
-        "get_site" => {
-            let site_id = arguments.get("site_id").and_then(|v| v.as_str()).unwrap_or("main-app");
+            if let (Some(suuid), Some(buuid)) = (parsed_server, parsed_backup) {
+                let server_row = sqlx::query("SELECT node_uuid FROM servers WHERE uuid = $1")
+                    .bind(suuid)
+                    .fetch_optional(state.database.read())
+                    .await;
 
-            format_mcp_content(json!({
-                "site_id": site_id,
-                "address": format!("http://{site_id}.localhost:5173"),
-                "status": "active",
-                "domains": [
-                    { "domain": format!("{site_id}.localhost"), "ssl_active": true, "primary": true }
-                ],
-                "last_deploy": {
-                    "commit": "a1b2c3d",
-                    "deployed_at": chrono::Utc::now().to_rfc3339(),
-                    "status": "success"
+                match server_row {
+                    Ok(Some(row)) => {
+                        let node_uuid: uuid::Uuid = row.get("node_uuid");
+                        if let Ok(Some(node)) = shared::models::node::Node::by_uuid_optional(&state.database, node_uuid).await {
+                            #[derive(serde::Serialize)]
+                            struct BackupDownloadJwt {
+                                scope: &'static str,
+                                backup_uuid: uuid::Uuid,
+                                server_uuid: uuid::Uuid,
+                                unique_id: uuid::Uuid,
+                                exp: i64,
+                            }
+
+                            let payload = BackupDownloadJwt {
+                                scope: "backup-download",
+                                backup_uuid: buuid,
+                                server_uuid: suuid,
+                                unique_id: uuid::Uuid::new_v4(),
+                                exp: chrono::Utc::now().timestamp() + 900,
+                            };
+
+                            if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload) {
+                                let download_url = format!("{}/download/backup?token={}", node.url.to_string().trim_end_matches('/'), urlencoding::encode(&token));
+                                format_mcp_content(json!({
+                                    "server_uuid": server_uuid,
+                                    "backup_uuid": backup_uuid,
+                                    "download_url": download_url,
+                                    "expires_in_seconds": 900
+                                }))
+                            } else {
+                                format_mcp_error("Failed to generate backup download JWT token")
+                            }
+                        } else {
+                            format_mcp_error("Node not found for server")
+                        }
+                    }
+                    _ => format_mcp_error(&format!("Server with UUID '{server_uuid}' not found")),
                 }
-            }))
-        }
-
-        "deploy_repo" => {
-            let site_id = arguments.get("site_id").and_then(|v| v.as_str()).unwrap_or("");
-            let repo_url = arguments.get("repo_url").and_then(|v| v.as_str()).unwrap_or("");
-            let branch = arguments.get("branch").and_then(|v| v.as_str()).unwrap_or("main");
-
-            format_mcp_content(json!({
-                "status": "deploy_started",
-                "site_id": site_id,
-                "repo_url": repo_url,
-                "branch": branch,
-                "build_id": uuid::Uuid::new_v4().to_string()
-            }))
-        }
-
-        "deploy_files" => {
-            let site_id = arguments.get("site_id").and_then(|v| v.as_str()).unwrap_or("");
-            let archive_url = arguments.get("archive_url").and_then(|v| v.as_str()).unwrap_or("");
-
-            format_mcp_content(json!({
-                "status": "file_deploy_queued",
-                "site_id": site_id,
-                "archive_url": archive_url,
-                "deploy_id": uuid::Uuid::new_v4().to_string()
-            }))
-        }
-
-        "attach_domain" => {
-            let site_id = arguments.get("site_id").and_then(|v| v.as_str()).unwrap_or("");
-            let domain = arguments.get("domain").and_then(|v| v.as_str()).unwrap_or("");
-
-            format_mcp_content(json!({
-                "status": "domain_attached",
-                "site_id": site_id,
-                "domain": domain,
-                "ssl_status": "provisioning_auto_cert",
-                "dns_records": [
-                    { "type": "A", "name": "@", "value": "127.0.0.1" }
-                ]
-            }))
-        }
-
-        "detach_domain" => {
-            let site_id = arguments.get("site_id").and_then(|v| v.as_str()).unwrap_or("");
-            let domain = arguments.get("domain").and_then(|v| v.as_str()).unwrap_or("");
-
-            format_mcp_content(json!({
-                "status": "domain_detached",
-                "site_id": site_id,
-                "domain": domain
-            }))
+            } else {
+                format_mcp_error("Invalid server_uuid or backup_uuid")
+            }
         }
 
         "search_plugins" => {

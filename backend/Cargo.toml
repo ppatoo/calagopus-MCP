@@ -25,3 +25,4 @@ sqlx = { workspace = true }
 futures-util = { workspace = true }
 wings-api = { path = "../../api-clients/wings-api" }
 reqwest = { workspace = true }
+urlencoding = { workspace = true }
