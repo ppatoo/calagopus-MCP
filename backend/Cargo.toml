@@ -1,6 +1,6 @@
 [package]
 name = "dev_calagopus_mcpserver"
-version = "1.3.1"
+version = "1.3.2"
 edition = "2024"
 description = "Model Context Protocol (MCP) Connector extension for Calagopus game panel."
 authors = ["Pato"]

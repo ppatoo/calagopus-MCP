@@ -69,7 +69,7 @@ pub async fn rotate_mcp_secret(state: &State) -> String {
 impl Extension for ExtensionStruct {
     async fn initialize(&mut self, state: State) {
         let _ = get_or_generate_mcp_secret(&state).await;
-        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.1 by Pato.");
+        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.2 by Pato.");
     }
 
     async fn initialize_router(
@@ -104,7 +104,7 @@ pub fn get_extension() -> ConstructedExtension {
         package_name: "dev.calagopus.mcpserver",
         description: "Exposes Calagopus Game Panel management tools (26 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
         authors: &["Pato"],
-        version: semver::Version::new(1, 3, 1),
+        version: semver::Version::new(1, 3, 2),
         extension: Arc::new(ExtensionStruct),
     }
 }
