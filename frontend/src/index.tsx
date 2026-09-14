@@ -73,7 +73,7 @@ function McpExtensionWidget() {
         </div>
         <div>
           <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold rounded-full">
-            Active (v1.3.2)
+            Active (v1.3.3)
           </span>
         </div>
       </div>

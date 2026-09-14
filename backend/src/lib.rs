@@ -69,7 +69,7 @@ pub async fn rotate_mcp_secret(state: &State) -> String {
 impl Extension for ExtensionStruct {
     async fn initialize(&mut self, state: State) {
         let _ = get_or_generate_mcp_secret(&state).await;
-        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.2 by Pato.");
+        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.3 by Pato.");
     }
 
     async fn initialize_router(
@@ -104,7 +104,7 @@ pub fn get_extension() -> ConstructedExtension {
         package_name: "dev.calagopus.mcpserver",
         description: "Exposes Calagopus Game Panel management tools (26 tools) via Model Context Protocol (MCP) JSON-RPC 2.0 and SSE transports.",
         authors: &["Pato"],
-        version: semver::Version::new(1, 3, 2),
+        version: semver::Version::new(1, 3, 3),
         extension: Arc::new(ExtensionStruct),
     }
 }
@@ -135,7 +135,7 @@ async fn get_mcp_status_handler(AxumState(state): AxumState<State>) -> Response 
     Json(json!({
         "package_name": "dev.calagopus.mcpserver",
         "name": "MCP Connector",
-        "version": "1.3.1",
+        "version": "1.3.3",
         "author": "Pato",
         "status": "active",
         "secret_key": key,
@@ -253,7 +253,7 @@ async fn universal_mcp_handler(
             },
             "serverInfo": {
                 "name": "calagopus-mcp-connector",
-                "version": "1.2.1"
+                "version": "1.3.3"
             }
         }),
         "notifications/initialized" => json!({}),
@@ -590,6 +590,38 @@ fn get_tools_list() -> Value {
     })
 }
 
+async fn get_wings_client_for_server(
+    state: &State,
+    server_uuid: &str,
+) -> Result<(wings_api::client::WingsClient, uuid::Uuid), String> {
+    let parsed_uuid = uuid::Uuid::parse_str(server_uuid)
+        .map_err(|_| format!("Invalid server UUID: '{server_uuid}'"))?;
+
+    let row = sqlx::query(
+        r#"
+        SELECT nodes.url, nodes.token
+        FROM servers
+        JOIN nodes ON nodes.uuid = servers.node_uuid
+        WHERE servers.uuid = $1
+        "#
+    )
+    .bind(parsed_uuid)
+    .fetch_optional(state.database.read())
+    .await
+    .map_err(|e| format!("Database query error: {e}"))?
+    .ok_or_else(|| format!("Server with UUID '{server_uuid}' not found"))?;
+
+    let url: String = row.get("url");
+    let token_bytes: Vec<u8> = row.get("token");
+    let decrypted_token = state.database
+        .decrypt(token_bytes)
+        .await
+        .map_err(|e| format!("Failed to decrypt node token: {e}"))?;
+
+    let client = wings_api::client::WingsClient::new(url, decrypted_token.to_string());
+    Ok((client, parsed_uuid))
+}
+
 async fn execute_tool(state: &State, params: Option<Value>) -> Value {
     let params = params.unwrap_or(json!({}));
     let raw_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -761,48 +793,93 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
         "power_server" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let action = arguments.get("action").and_then(|v| v.as_str()).unwrap_or("restart");
+            let action_str = arguments.get("action").and_then(|v| v.as_str()).unwrap_or("restart");
 
-            format_mcp_content(json!({
-                "status": "power_signal_sent",
-                "server_uuid": server_uuid,
-                "action": action,
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            }))
+            let action = match action_str.to_lowercase().as_str() {
+                "start" => wings_api::ServerPowerAction::Start,
+                "stop" => wings_api::ServerPowerAction::Stop,
+                "restart" => wings_api::ServerPowerAction::Restart,
+                "kill" => wings_api::ServerPowerAction::Kill,
+                _ => return format_mcp_error(&format!("Invalid power action: '{action_str}'. Must be one of: start, stop, restart, kill.")),
+            };
+
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let req_body = wings_api::servers_server_power::post::RequestBody {
+                        action,
+                        wait_seconds: None,
+                    };
+                    match client.post_servers_server_power(server_id, &req_body).await {
+                        Ok(_) => format_mcp_content(json!({
+                            "status": "power_signal_sent",
+                            "server_uuid": server_uuid,
+                            "action": action_str,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon power signal failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "send_console_command" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let command = arguments.get("command").and_then(|v| v.as_str()).unwrap_or("");
 
-            format_mcp_content(json!({
-                "status": "command_queued",
-                "server_uuid": server_uuid,
-                "command": command,
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            }))
+            if command.trim().is_empty() {
+                return format_mcp_error("Command string cannot be empty");
+            }
+
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let req_body = wings_api::servers_server_commands::post::RequestBody {
+                        commands: vec![command.to_string().into()],
+                    };
+                    match client.post_servers_server_commands(server_id, &req_body).await {
+                        Ok(_) => format_mcp_content(json!({
+                            "status": "command_executed",
+                            "server_uuid": server_uuid,
+                            "command": command,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon command execution failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "read_console" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let lines = arguments.get("lines").and_then(|v| v.as_i64()).unwrap_or(50);
 
-            format_mcp_content(json!({
-                "server_uuid": server_uuid,
-                "lines_requested": lines,
-                "console_output": [
-                    "[Server thread/INFO]: Starting minecraft server version 1.20.4",
-                    "[Server thread/INFO]: Loading properties",
-                    "[Server thread/INFO]: Default game type: SURVIVAL",
-                    "[Server thread/INFO]: Generating keypair",
-                    "[Server thread/INFO]: Starting Minecraft server on *:25565",
-                    "[Server thread/INFO]: Using default channel type",
-                    "[Server thread/INFO]: Preparing level \"world\"",
-                    "[Server thread/INFO]: Preparing start region for dimension minecraft:overworld",
-                    "[Server thread/INFO]: Time elapsed: 1420 ms",
-                    "[Server thread/INFO]: Done (2.104s)! For help, type \"help\""
-                ]
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let query = wings_api::servers_server_logs::get::Query {
+                        lines: Some(lines as u64),
+                        ..Default::default()
+                    };
+                    match client.get_servers_server_logs(server_id, &query).await {
+                        Ok(mut logs_reader) => {
+                            use tokio::io::AsyncReadExt;
+                            let mut log_buf = String::new();
+                            if let Err(e) = logs_reader.read_to_string(&mut log_buf).await {
+                                return format_mcp_error(&format!("Failed reading console logs stream: {e}"));
+                            }
+                            let lines_vec: Vec<&str> = log_buf.lines().collect();
+                            format_mcp_content(json!({
+                                "server_uuid": server_uuid,
+                                "lines_requested": lines,
+                                "lines_returned": lines_vec.len(),
+                                "console_output": lines_vec
+                            }))
+                        }
+                        Err(e) => format_mcp_error(&format!("Wings daemon log retrieval failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "list_machines" => {
@@ -842,29 +919,67 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let directory = arguments.get("directory").and_then(|v| v.as_str()).unwrap_or("/");
 
-            format_mcp_content(json!({
-                "server_uuid": server_uuid,
-                "directory": directory,
-                "entries": [
-                    { "name": "server.properties", "size": 1240, "is_file": true, "modified": "2026-09-12T16:00:00Z" },
-                    { "name": "eula.txt", "size": 160, "is_file": true, "modified": "2026-09-12T16:00:00Z" },
-                    { "name": "paper.yml", "size": 4200, "is_file": true, "modified": "2026-09-12T16:00:00Z" },
-                    { "name": "plugins", "size": 0, "is_file": false, "modified": "2026-09-12T16:00:00Z" },
-                    { "name": "world", "size": 0, "is_file": false, "modified": "2026-09-12T16:00:00Z" }
-                ]
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let query = wings_api::servers_server_files_list::get::Query {
+                        directory: Some(directory.into()),
+                        ..Default::default()
+                    };
+                    match client.get_servers_server_files_list(server_id, &query).await {
+                        Ok(resp) => {
+                            let entries: Vec<Value> = resp.entries.into_iter().map(|e| {
+                                json!({
+                                    "name": e.name,
+                                    "size": e.size,
+                                    "is_file": e.file,
+                                    "is_directory": e.directory,
+                                    "modified": e.modified.to_rfc3339()
+                                })
+                            }).collect();
+
+                            format_mcp_content(json!({
+                                "server_uuid": server_uuid,
+                                "directory": directory,
+                                "total_entries": entries.len(),
+                                "entries": entries
+                            }))
+                        }
+                        Err(e) => format_mcp_error(&format!("Wings daemon list_files failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "read_file" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
 
-            format_mcp_content(json!({
-                "server_uuid": server_uuid,
-                "path": path,
-                "size_bytes": 160,
-                "content": "#By changing the setting below to TRUE you are indicating your agreement to our EULA\neula=true\n"
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let query = wings_api::servers_server_files_contents::get::Query {
+                        file: Some(path.into()),
+                        ..Default::default()
+                    };
+                    match client.get_servers_server_files_contents(server_id, &query).await {
+                        Ok(mut content_reader) => {
+                            use tokio::io::AsyncReadExt;
+                            let mut file_content = String::new();
+                            if let Err(e) = content_reader.read_to_string(&mut file_content).await {
+                                return format_mcp_error(&format!("Failed reading file content: {e}"));
+                            }
+                            format_mcp_content(json!({
+                                "server_uuid": server_uuid,
+                                "path": path,
+                                "size_bytes": file_content.len(),
+                                "content": file_content
+                            }))
+                        }
+                        Err(e) => format_mcp_error(&format!("Wings daemon read_file failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "write_file" => {
@@ -872,13 +987,26 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
             let content = arguments.get("content").and_then(|v| v.as_str()).unwrap_or("");
 
-            format_mcp_content(json!({
-                "status": "file_written",
-                "server_uuid": server_uuid,
-                "path": path,
-                "bytes_written": content.len(),
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let query = wings_api::servers_server_files_write::post::Query {
+                        file: Some(path.into()),
+                        ..Default::default()
+                    };
+                    let body_reader = wings_api::client::AsyncRequestReader::new(std::io::Cursor::new(content.as_bytes().to_vec()));
+                    match client.post_servers_server_files_write(server_id, body_reader, &query).await {
+                        Ok(_) => format_mcp_content(json!({
+                            "status": "file_written",
+                            "server_uuid": server_uuid,
+                            "path": path,
+                            "bytes_written": content.len(),
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon write_file failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "upload_file_from_url" => {
@@ -886,13 +1014,28 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let url = arguments.get("url").and_then(|v| v.as_str()).unwrap_or("");
             let directory = arguments.get("directory").and_then(|v| v.as_str()).unwrap_or("/");
 
-            format_mcp_content(json!({
-                "status": "upload_job_queued",
-                "server_uuid": server_uuid,
-                "url": url,
-                "target_directory": directory,
-                "job_id": uuid::Uuid::new_v4().to_string()
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let req_body = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: directory.into(),
+                        url: url.into(),
+                        file_name: None,
+                        use_header: true,
+                        foreground: false,
+                    };
+                    match client.post_servers_server_files_pull(server_id, &req_body).await {
+                        Ok(_) => format_mcp_content(json!({
+                            "status": "upload_job_queued",
+                            "server_uuid": server_uuid,
+                            "url": url,
+                            "target_directory": directory,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon upload_file_from_url failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "download_files" => {
@@ -903,7 +1046,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             format_mcp_content(json!({
                 "server_uuid": server_uuid,
                 "path": path,
-                "download_url": format!("http://127.0.0.1:8000/api/client/servers/{server_uuid}/files/download?token={token}"),
+                "download_url": format!("/api/client/servers/{server_uuid}/files/download?token={token}"),
                 "expires_in_seconds": 3600
             }))
         }
@@ -957,14 +1100,27 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let name = arguments.get("name").and_then(|v| v.as_str()).unwrap_or("Manual Backup");
 
-            let backup_uuid = uuid::Uuid::new_v4().to_string();
-            format_mcp_content(json!({
-                "status": "backup_queued",
-                "server_uuid": server_uuid,
-                "backup_uuid": backup_uuid,
-                "name": name,
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let backup_uuid = uuid::Uuid::new_v4();
+                    let req_body = wings_api::servers_server_backup::post::RequestBody {
+                        adapter: wings_api::BackupAdapter::Wings,
+                        uuid: backup_uuid,
+                        ignore: "".into(),
+                    };
+                    match client.post_servers_server_backup(server_id, &req_body).await {
+                        Ok(_) => format_mcp_content(json!({
+                            "status": "backup_queued",
+                            "server_uuid": server_uuid,
+                            "backup_uuid": backup_uuid.to_string(),
+                            "name": name,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon create_backup failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "download_backup" => {
@@ -975,7 +1131,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             format_mcp_content(json!({
                 "server_uuid": server_uuid,
                 "backup_uuid": backup_uuid,
-                "download_url": format!("http://127.0.0.1:8000/api/client/servers/{server_uuid}/backups/{backup_uuid}/download?token={token}"),
+                "download_url": format!("/api/client/servers/{server_uuid}/backups/{backup_uuid}/download?token={token}"),
                 "expires_in_seconds": 900
             }))
         }
@@ -1056,7 +1212,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let mc_version = arguments.get("mc_version").and_then(|v| v.as_str()).unwrap_or("1.20.4");
 
             // Query Modrinth API
-            let client = reqwest::Client::builder().user_agent("CalagopusMCP/1.2.1").build().ok();
+            let client = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build().ok();
             let mut results: Vec<Value> = Vec::new();
 
             if let Some(c) = client {
@@ -1113,41 +1269,130 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
         "list_plugins" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
 
-            format_mcp_content(json!({
-                "server_uuid": server_uuid,
-                "directory": "/plugins",
-                "plugins": [
-                    { "filename": "LuckPerms-Bukkit-5.4.102.jar", "name": "LuckPerms", "version": "5.4.102", "size_bytes": 2400000, "enabled": true },
-                    { "filename": "Vault.jar", "name": "Vault", "version": "1.7.3", "size_bytes": 350000, "enabled": true },
-                    { "filename": "EssentialsX-2.20.1.jar", "name": "Essentials", "version": "2.20.1", "size_bytes": 1800000, "enabled": true }
-                ]
-            }))
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let query = wings_api::servers_server_files_list::get::Query {
+                        directory: Some("/plugins".into()),
+                        ..Default::default()
+                    };
+                    match client.get_servers_server_files_list(server_id, &query).await {
+                        Ok(resp) => {
+                            let plugins: Vec<Value> = resp.entries.into_iter()
+                                .filter(|e| e.file && e.name.ends_with(".jar"))
+                                .map(|e| {
+                                    let clean_name = e.name.trim_end_matches(".jar").to_string();
+                                    json!({
+                                        "filename": e.name,
+                                        "name": clean_name,
+                                        "size_bytes": e.size,
+                                        "modified": e.modified.to_rfc3339()
+                                    })
+                                }).collect();
+
+                            format_mcp_content(json!({
+                                "server_uuid": server_uuid,
+                                "directory": "/plugins",
+                                "total_plugins": plugins.len(),
+                                "plugins": plugins
+                            }))
+                        }
+                        Err(e) => format_mcp_error(&format!("Wings daemon list_plugins failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "install_plugin" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
-            let plugin_id = arguments.get("plugin_id").and_then(|v| v.as_str()).unwrap_or("luckperms");
-            let filename = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("plugin.jar");
+            let plugin_id = arguments.get("plugin_id").and_then(|v| v.as_str()).unwrap_or("");
+            let download_url_param = arguments.get("download_url").and_then(|v| v.as_str()).unwrap_or("");
+            let filename_param = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("");
 
-            format_mcp_content(json!({
-                "status": "plugin_installed",
-                "server_uuid": server_uuid,
-                "plugin_id": plugin_id,
-                "target_file": format!("/plugins/{filename}"),
-                "installed_at": chrono::Utc::now().to_rfc3339()
-            }))
+            let mut download_url = download_url_param.to_string();
+            let mut filename = filename_param.to_string();
+
+            if download_url.is_empty() && !plugin_id.is_empty() {
+                let http_client = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.3").build().ok();
+                if let Some(c) = http_client {
+                    let modrinth_versions_url = format!("https://api.modrinth.com/v2/project/{plugin_id}/version");
+                    if let Ok(res) = c.get(&modrinth_versions_url).send().await {
+                        if let Ok(versions) = res.json::<Value>().await {
+                            if let Some(first_ver) = versions.as_array().and_then(|arr| arr.first()) {
+                                if let Some(files) = first_ver.get("files").and_then(|f| f.as_array()) {
+                                    if let Some(primary_file) = files.iter().find(|f| f.get("primary").and_then(|p| p.as_bool()).unwrap_or(false)).or_else(|| files.first()) {
+                                        if let Some(url) = primary_file.get("url").and_then(|u| u.as_str()) {
+                                            download_url = url.to_string();
+                                        }
+                                        if filename.is_empty() {
+                                            if let Some(fn_str) = primary_file.get("filename").and_then(|f| f.as_str()) {
+                                                filename = fn_str.to_string();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if download_url.is_empty() {
+                return format_mcp_error("Either direct 'download_url' or a valid 'plugin_id' (resolvable via Modrinth) must be provided.");
+            }
+
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let req_body = wings_api::servers_server_files_pull::post::RequestBody {
+                        root: "/plugins".into(),
+                        url: download_url.to_string().into(),
+                        file_name: if filename.is_empty() { None } else { Some(filename.clone().into()) },
+                        use_header: true,
+                        foreground: true,
+                    };
+                    match client.post_servers_server_files_pull(server_id, &req_body).await {
+                        Ok(_) => format_mcp_content(json!({
+                            "status": "plugin_installed",
+                            "server_uuid": server_uuid,
+                            "plugin_id": plugin_id,
+                            "download_url": download_url,
+                            "target_file": format!("/plugins/{}", if filename.is_empty() { "downloaded_plugin.jar" } else { &filename }),
+                            "installed_at": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon install_plugin failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         "remove_plugin" => {
             let server_uuid = arguments.get("server_uuid").and_then(|v| v.as_str()).unwrap_or("");
             let filename = arguments.get("filename").and_then(|v| v.as_str()).unwrap_or("");
 
-            format_mcp_content(json!({
-                "status": "plugin_removed",
-                "server_uuid": server_uuid,
-                "filename": filename,
-                "target_file": format!("/plugins/{filename}")
-            }))
+            if filename.trim().is_empty() {
+                return format_mcp_error("Plugin filename cannot be empty");
+            }
+
+            match get_wings_client_for_server(state, server_uuid).await {
+                Ok((client, server_id)) => {
+                    let req_body = wings_api::servers_server_files_delete::post::RequestBody {
+                        root: "/plugins".into(),
+                        files: vec![filename.to_string().into()],
+                    };
+                    match client.post_servers_server_files_delete(server_id, &req_body).await {
+                        Ok(resp) => format_mcp_content(json!({
+                            "status": "plugin_removed",
+                            "server_uuid": server_uuid,
+                            "filename": filename,
+                            "deleted_count": resp.deleted,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        })),
+                        Err(e) => format_mcp_error(&format!("Wings daemon remove_plugin failed: {e:?}")),
+                    }
+                }
+                Err(err) => format_mcp_error(&err),
+            }
         }
 
         _ => format_mcp_error(&format!("Unknown tool '{raw_name}' (normalized: '{norm_name}')")),
