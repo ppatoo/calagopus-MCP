@@ -84,7 +84,7 @@ impl Extension for ExtensionStruct {
             tracing::error!("Failed to initialize server_domains table for MCP: {e}");
         }
 
-        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.4 by Pato.");
+        tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.5 by Pato.");
     }
 
     async fn initialize_router(
@@ -150,7 +150,7 @@ async fn get_mcp_status_handler(AxumState(state): AxumState<State>) -> Response 
     Json(json!({
         "package_name": "dev.calagopus.mcpserver",
         "name": "MCP Connector",
-        "version": "1.3.4",
+        "version": "1.3.5",
         "author": "Pato",
         "status": "active",
         "secret_key": key,
@@ -268,7 +268,7 @@ async fn universal_mcp_handler(
             },
             "serverInfo": {
                 "name": "calagopus-mcp-connector",
-                "version": "1.3.4"
+                "version": "1.3.5"
             }
         }),
         "notifications/initialized" => json!({}),
@@ -688,7 +688,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
             format_mcp_content(json!({
                 "panel_status":   "healthy",
-                "version":        "1.3.4",
+                "version":        "1.3.5",
                 "database":       "postgresql",
                 "total_users":    users_count,
                 "total_nodes":    nodes_count,
@@ -1491,7 +1491,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
             let mc_version = arguments.get("mc_version").and_then(|v| v.as_str()).unwrap_or("1.20.4");
 
             let mut results: Vec<Value> = Vec::new();
-            if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.4").build() {
+            if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.5").build() {
                 let modrinth_url = format!(
                     "https://api.modrinth.com/v2/search?query={query}&facets=[[\"categories:{software}\"]]"
                 );
@@ -1569,7 +1569,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
             // Resolve via Modrinth if direct URL not given
             if download_url.is_empty() && !plugin_id.is_empty() {
-                if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.4").build() {
+                if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.5").build() {
                     let versions_url = format!("https://api.modrinth.com/v2/project/{plugin_id}/version");
                     if let Ok(res) = c.get(&versions_url).send().await {
                         if let Ok(versions) = res.json::<Value>().await {
@@ -1598,7 +1598,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
             // Optional caller-supplied checksum verification
             if let Some(expected) = expected_checksum {
-                if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.4").build() {
+                if let Ok(c) = reqwest::Client::builder().user_agent("CalagopusMCP/1.3.5").build() {
                     if let Ok(res) = c.get(&download_url).send().await {
                         if let Ok(bytes) = res.bytes().await {
                             // Compute SHA-1 for verification (sha1 crate is commonly available via existing deps)
