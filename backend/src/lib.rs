@@ -70,6 +70,20 @@ pub async fn rotate_mcp_secret(state: &State) -> String {
 impl Extension for ExtensionStruct {
     async fn initialize(&mut self, state: State) {
         let _ = get_or_generate_mcp_secret(&state).await;
+        
+        // Ensure server_domains table exists for the new domain-related MCP tools
+        let create_table_query = "
+            CREATE TABLE IF NOT EXISTS server_domains (
+                uuid uuid PRIMARY KEY NOT NULL,
+                server_uuid uuid NOT NULL,
+                domain varchar(255) NOT NULL,
+                created timestamp DEFAULT now() NOT NULL
+            );
+        ";
+        if let Err(e) = sqlx::query(create_table_query).execute(state.database.write()).await {
+            tracing::error!("Failed to initialize server_domains table for MCP: {e}");
+        }
+
         tracing::info!("Initializing Calagopus MCP (Model Context Protocol) Connector Extension v1.3.4 by Pato.");
     }
 
@@ -1205,27 +1219,27 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
             let result = match (parsed, status_filter) {
                 (Some(su), Some("successful")) => sqlx::query(
-                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
-                     WHERE server_uuid=$1 AND is_successful=TRUE ORDER BY created DESC LIMIT $2 OFFSET $3"
+                    "SELECT uuid, name, successful, bytes, created FROM server_backups \
+                     WHERE server_uuid=$1 AND successful=TRUE ORDER BY created DESC LIMIT $2 OFFSET $3"
                 ).bind(su).bind(limit).bind(offset).fetch_all(state.database.read()).await,
                 (Some(su), Some("failed")) => sqlx::query(
-                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
-                     WHERE server_uuid=$1 AND is_successful=FALSE ORDER BY created DESC LIMIT $2 OFFSET $3"
+                    "SELECT uuid, name, successful, bytes, created FROM server_backups \
+                     WHERE server_uuid=$1 AND successful=FALSE ORDER BY created DESC LIMIT $2 OFFSET $3"
                 ).bind(su).bind(limit).bind(offset).fetch_all(state.database.read()).await,
                 (Some(su), _) => sqlx::query(
-                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                    "SELECT uuid, name, successful, bytes, created FROM server_backups \
                      WHERE server_uuid=$1 ORDER BY created DESC LIMIT $2 OFFSET $3"
                 ).bind(su).bind(limit).bind(offset).fetch_all(state.database.read()).await,
                 (None, Some("successful")) => sqlx::query(
-                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
-                     WHERE is_successful=TRUE ORDER BY created DESC LIMIT $1 OFFSET $2"
+                    "SELECT uuid, name, successful, bytes, created FROM server_backups \
+                     WHERE successful=TRUE ORDER BY created DESC LIMIT $1 OFFSET $2"
                 ).bind(limit).bind(offset).fetch_all(state.database.read()).await,
                 (None, Some("failed")) => sqlx::query(
-                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
-                     WHERE is_successful=FALSE ORDER BY created DESC LIMIT $1 OFFSET $2"
+                    "SELECT uuid, name, successful, bytes, created FROM server_backups \
+                     WHERE successful=FALSE ORDER BY created DESC LIMIT $1 OFFSET $2"
                 ).bind(limit).bind(offset).fetch_all(state.database.read()).await,
                 (None, _) => sqlx::query(
-                    "SELECT uuid, name, is_successful, bytes, created FROM server_backups \
+                    "SELECT uuid, name, successful, bytes, created FROM server_backups \
                      ORDER BY created DESC LIMIT $1 OFFSET $2"
                 ).bind(limit).bind(offset).fetch_all(state.database.read()).await,
             };
@@ -1235,7 +1249,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                     let list: Vec<Value> = rows.into_iter().map(|r| {
                         let buuid: uuid::Uuid = r.get("uuid");
                         let name: String      = r.get("name");
-                        let ok: bool          = r.get("is_successful");
+                        let ok: bool          = r.get("successful");
                         let bytes: i64        = r.get("bytes");
                         let created: chrono::NaiveDateTime = r.get("created");
                         json!({ "uuid": buuid.to_string(), "name": name, "completed": ok, "size_bytes": bytes, "created": created.to_string() })
