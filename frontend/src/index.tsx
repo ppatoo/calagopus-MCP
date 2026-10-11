@@ -9,14 +9,17 @@ function McpExtensionWidget() {
   const [message, setMessage] = useState<string | null>(null);
 
   const fetchKey = () => {
-    fetch('/api/extensions/mcp/v1/key')
-      .then((res) => res.json())
+    fetch('/api/admin/extensions/mcp/v1/key', { credentials: 'same-origin' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         if (data.secret_key) {
           setSecretKey(data.secret_key);
         }
       })
-      .catch(() => setSecretKey('Unable to fetch secret key'));
+      .catch(() => setSecretKey('Unable to fetch secret key (admin auth required)'));
   };
 
   useEffect(() => {
@@ -31,7 +34,11 @@ function McpExtensionWidget() {
     setRotating(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/extensions/mcp/v1/key/rotate', { method: 'POST' });
+      const res = await fetch('/api/admin/extensions/mcp/v1/key/rotate', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.secret_key) {
         setSecretKey(data.secret_key);
