@@ -171,7 +171,7 @@ async fn get_public_mcp_status_handler() -> Response {
     Json(json!({
         "package_name": "dev.calagopus.mcpserver",
         "name": "MCP Connector",
-        "version": "1.3.7",
+        "version": "1.3.8",
         "author": "Pato",
         "status": "active",
         "tools_count": 26,
@@ -185,7 +185,7 @@ async fn get_admin_mcp_status_handler(AxumState(state): AxumState<State>) -> Res
     Json(json!({
         "package_name": "dev.calagopus.mcpserver",
         "name": "MCP Connector",
-        "version": "1.3.7",
+        "version": "1.3.8",
         "author": "Pato",
         "status": "active",
         "secret_key": key,
@@ -769,7 +769,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
 
             format_mcp_content(json!({
                 "panel_status":   "healthy",
-                "version":        "1.3.7",
+                "version":        "1.3.8",
                 "database":       "postgresql",
                 "total_users":    users_count,
                 "total_nodes":    nodes_count,
@@ -1286,7 +1286,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                             server_uuid: parsed_uuid, unique_id: uuid::Uuid::new_v4(),
                             exp: chrono::Utc::now().timestamp() + safe_expiry,
                         };
-                        if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload) {
+                        if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload).await {
                             let url = format!("{}/download/file?token={}",
                                 node.public_url.as_ref().unwrap_or(&node.url).to_string().trim_end_matches('/'),
                                 urlencoding::encode(&token)
@@ -1427,7 +1427,7 @@ async fn execute_tool(state: &State, params: Option<Value>) -> Value {
                                 scope: "backup-download", backup_uuid: buuid, server_uuid: suuid,
                                 unique_id: uuid::Uuid::new_v4(), exp: chrono::Utc::now().timestamp() + 900,
                             };
-                            if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload) {
+                            if let Ok(token) = node.create_jwt(&state.database, &state.jwt, &payload).await {
                                 let url = format!("{}/download/backup?token={}",
                                     node.public_url.as_ref().unwrap_or(&node.url).to_string().trim_end_matches('/'), urlencoding::encode(&token)
                                 );
