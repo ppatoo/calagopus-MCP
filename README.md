@@ -1,7 +1,7 @@
 # Calagopus Model Context Protocol (MCP) Connector Extension
 
 [![License: Custom](https://img.shields.io/badge/License-Custom%20(ppatoo)-red.svg)](LICENSE)
-[![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.3.1-blue.svg)](https://calagopus.com)
+[![Calagopus Extension Spec](https://img.shields.io/badge/Calagopus-Extension%20v1.3.9-blue.svg)](https://calagopus.com)
 
 The **Calagopus MCP Connector** (`dev.calagopus.mcpserver`) is an extension for the [Calagopus Game Panel](https://calagopus.com) authored by **Pato** that exposes **26 management tools** via the Model Context Protocol (MCP) using JSON-RPC 2.0 and Server-Sent Events (SSE) transports.
 
@@ -29,10 +29,10 @@ See the full terms in the [LICENSE](LICENSE) file.
 
 ## 📦 Package Archive Location
 
-- **Extension Archive File**: `dev_calagopus_mcpserver.c7s` (Also available in `/home/pato/Downloads/dev_calagopus_mcpserver.c7s`)
+- **Extension Archive File**: `dev_calagopus_mcpserver.c7s` 
 - **Package Identifier**: `dev.calagopus.mcpserver`
 - **Author**: `Pato`
-- **Version**: `1.3.1`
+- **Version**: `1.3.9`
 
 ---
 
@@ -43,8 +43,8 @@ When installed on any Calagopus panel instance, the extension automatically gene
 ### Managing & Rotating Your Key:
 1. **Extension Configure Page**: Navigate to Admin Extensions $\rightarrow$ **MCP Connector Widget** in your panel to view your active key, copy the authenticated SSE URL, and click **🔄 Rotate Secret Key** to instantly re-roll a new key at any time.
 2. **Key API Endpoints**:
-   - `GET /api/extensions/mcp/v1/key`: Retrieve current key & SSE URL.
-   - `POST /api/extensions/mcp/v1/key/rotate`: Re-roll and save a new secret key.
+   - `GET /api/admin/extensions/mcp/v1/key`: Retrieve current key (panel administrators only). The public `/api/extensions/mcp/v1/key` returns 401.
+   - `POST /api/admin/extensions/mcp/v1/key/rotate`: Re-roll and save a new secret key (panel administrators only).
    - `GET /api/extensions/mcp/v1/status`: Extension status and metadata.
 
 ---
@@ -126,7 +126,15 @@ All tools support both hyphenated (`list-servers`), underscore (`list_servers`),
 
 ---
 
-## 📡 API Endpoints
+## 🔒 Security Notes
+
+- Use `Authorization: Bearer <key>` or `X-MCP-Key: <key>`. The `?api_key=` URL form still works for existing clients; set `CALAGOPUS_MCP_ALLOW_QUERY_KEY=false` to disable it. URLs are written to proxy and access logs.
+- The MCP key can manage every server on the panel through these tools. Treat it as an admin credential.
+- `CALAGOPUS_MCP_READONLY=true` blocks every state-changing tool.
+- Plugin checksums are SHA-1. The downloaded jar is hashed and removed on mismatch.
+- Node-side URL fetches (`upload-file-from-url`, `deploy-files`, `deploy-repo`, `install-plugin`) reject private and loopback addresses by literal IP and obvious internal hostnames. They cannot stop DNS rebinding; use node firewall rules for internal ranges.
+
+📡 API Endpoints
 
 - **Discovery Endpoint**: `GET /api/extensions/mcp/v1/info`
 - **SSE Stream Transport**: `GET /api/extensions/mcp/v1/sse`

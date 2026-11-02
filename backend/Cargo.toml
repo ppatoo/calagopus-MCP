@@ -26,3 +26,5 @@ futures-util = { workspace = true }
 wings-api = { path = "../../api-clients/wings-api" }
 reqwest = { workspace = true }
 urlencoding = { workspace = true }
+url = { workspace = true }
+sha1 = "0.10"
